@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="profile-page-shell">
+    <section class="profile-hero panel-card">
+        <div class="cover-photo-wrap">
+            <img src="{{ url_for('uploaded_file', filename=user.cover_photo) }}" alt="{{ user.username }} cover photo">
+        </div>
+        <div class="profile-hero-content">
+            <div class="profile-hero-main">
+                <div class="profile-hero-avatar-wrap">
+                    <img src="{{ url_for('uploaded_file', filename=user.get_profile_picture) }}" alt="{{ user.username }} profile picture">
+                </div>
+                <div class="profile-identity">
+                    <div class="identity-row">
+                        <h1>{{ user.username }}</h1>
+                        {% if user == current_user %}
+                            <a href="{{ url_for('edit_profile') }}" class="action-chip action-chip--solid">
+                                <i class="bi bi-pencil-square"></i> Edit profile
+                            </a>
+                        {% endif %}
+                    </div>
+                    <p class="profile-bio">{{ user.bio or 'No bio yet — tell everyone what matters most to you.' }}</p>
+                    <div class="meta-strip">
+                        {% if user.current_city %}<span><i class="bi bi-geo-alt"></i> {{ user.current_city }}</span>{% endif %}
+                        {% if user.current_job or user.job_title or user.company %}<span><i class="bi bi-briefcase"></i> {{ user.job_title or user.current_job or 'Professional' }}{% if user.company %} at {{ user.company }}{% endif %}</span>{% endif %}
+                        <a href="{{ url_for('friends_list', username=user.username) }}" class="profile-link"><i class="bi bi-people"></i> {{ friend_count }} friends</a>
+                    </div>
+                </div>
+            </div>
+            {% if user != current_user %}
+                <div class="profile-actions">
+                    {% if not current_user.has_blocked(user) %}
+                        {% if user not in current_user.friends and not current_user.has_sent_friend_request(user) %}
+                            <form action="{{ url_for('send_friend_request', user_id=user.id) }}" method="POST" data-ajax-form="true" class="friend-request-form">
+                                <button type="submit" class="action-chip action-chip--solid"><i class="bi bi-person-plus"></i> Add friend</button>
+                            </form>
+                        {% elif user in current_user.friends %}
+                            <span class="action-chip action-chip--muted"><i class="bi bi-person-check"></i> Friends</span>
+                        {% else %}
+                            <span class="action-chip action-chip--muted"><i class="bi bi-clock-history"></i> Request sent</span>
+                        {% endif %}
+                        <a href="{{ url_for('messages') }}?user={{ user.id }}" class="action-chip"><i class="bi bi-chat-left-text"></i> Message</a>
+                        <form action="{{ url_for('block_user', user_id=user.id) }}" method="POST">
+                            <button type="submit" class="action-chip action-chip--danger"><i class="bi bi-slash-circle"></i> Block</button>
+                        </form>
+                    {% else %}
+                        <form action="{{ url_for('unblock_user', user_id=user.id) }}" method="POST">
+                            <button type="submit" class="action-chip action-chip--danger"><i class="bi bi-slash-circle-fill"></i> Unblock</button>
+                        </form>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <div class="profile-grid">
+        <aside class="profile-side-stack">
+            <div class="panel-card sidebar-card">
+                <div class="section-head"><h4>About</h4></div>
+                <div class="detail-list">
+                    {% if user.education %}
+                        <div><i class="bi bi-mortarboard"></i><span>{% for edu in user.education %}{{ edu.degree }} in {{ edu.field_of_study }}{% if not loop.last %}<br>{% endif %}{% endfor %}</span></div>
+                    {% endif %}
+                    {% if user.place_of_birth %}<div><i class="bi bi-house-heart"></i><span>From {{ user.place_of_birth }}</span></div>{% endif %}
+                    {% if user.date_of_birth %}<div><i class="bi bi-calendar-event"></i><span>Born {{ user.date_of_birth.strftime('%B %d, %Y') }}</span></div>{% endif %}
+                    {% if user.marital_status %}<div><i class="bi bi-heart"></i><span>{{ user.marital_status }}</span></div>{% endif %}
+                    {% if not user.education and not user.place_of_birth and not user.date_of_birth and not user.marital_status %}
+                        <div class="empty-inline"><i class="bi bi-info-circle"></i><span>No profile details added yet.</span></div>
+                    {% endif %}
+                </div>
+            </div>
+            {% if recent_friends %}
+            <div class="panel-card sidebar-card">
+                <div class="section-head"><h4>Friends</h4><a href="{{ url_for('friends_list', username=user.username) }}">View all</a></div>
+                <div class="mini-friend-grid">
+                    {% for friend in recent_friends %}
+                    <a href="{{ url_for('profile', username=friend.username) }}" class="mini-friend-item" title="{{ friend.username }}">
+                        <img src="{{ url_for('uploaded_file', filename=friend.get_profile_picture) }}" alt="{{ friend.username }} profile picture">
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </aside>
+
+        <main class="profile-feed">
+            {% for post in posts %}
+                <article class="panel-card post-card profile-post-card">
+                    <div class="post-header">
+                        <div class="post-author">
+                            <img src="{{ url_for('uploaded_file', filename=post.author.get_profile_picture) }}" class="profile-picture-small" alt="{{ post.author.username }} avatar">
+                            <div>
+                                <div class="author-row">
+                                    <h4><a href="{{ url_for('profile', username=post.author.username) }}">{{ post.author.username }}</a></h4>
+                                    {% if post.author.is_online %}<span class="status-badge">online</span>{% endif %}
+                                </div>
+                                <div class="meta-row">
+                                    <span>{{ post.timestamp.strftime('%b %d, %Y') }}</span>
+                                    <span>•</span>
+                                    <span>{{ post.timestamp.strftime('%H:%M') }}</span>
+                                    {% if post.feeling %}<span>•</span><span>{{ post.feeling }}</span>{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% if post.author == current_user %}
+                        <div class="dropdown">
+                            <button class="btn btn-link muted-dot" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-three-dots"></i></button>
+                            <ul class="dropdown-menu dropdown-menu-end menu-card">
+                                <li><form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST"><button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete post</button></form></li>
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if post.content %}<p class="post-copy">{{ post.content }}</p>{% endif %}
+                    {% if post.media_file %}
+                        {% if post.media_type == 'image' %}<div class="post-media media-image"><img src="{{ url_for('uploaded_file', filename=post.media_file) }}" alt="Post media"></div>{% elif post.media_type == 'video' %}<div class="post-media media-video"><video controls><source src="{{ url_for('uploaded_file', filename=post.media_file) }}" type="video/mp4">Your browser does not support video playback.</video></div>{% endif %}
+                    {% endif %}
+                    <div class="engagement-row">
+                        <div class="reaction-summary"><span class="reaction-bubble">❤</span><span>{{ post.likes|length }} likes</span></div>
+                        <div class="comment-summary"><span>{{ post.comments|length }} comments</span></div>
+                    </div>
+                    <div class="post-actions">
+                        <form method="POST" action="{{ url_for('like_post', post_id=post.id) }}" class="post-action-form">
+                            <button type="submit" class="action-btn small"><i class="bi bi-heart-fill"></i> Like</button>
+                        </form>
+                        <button type="button" class="action-btn small"><i class="bi bi-chat-left-text"></i> Comment</button>
+                        <button type="button" class="action-btn small"><i class="bi bi-share"></i> Share</button>
+                    </div>
+                </article>
+            {% else %}
+                <div class="empty-state-panel">
+                    <i class="bi bi-camera-reels"></i>
+                    <h4>No posts to display</h4>
+                    <p>Nothing here yet — check back soon.</p>
+                </div>
+            {% endfor %}
+        </main>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="120" height="40" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Rectangle -->
+  <rect width="120" height="40" fill="none"/>
+  
+  <!-- HDM Text -->
+  <text x="10" y="30" font-family="Arial Black, sans-serif" font-size="28" fill="#ffffff" font-weight="bold">HDM</text>
+  
+  <!-- Decorative Elements -->
+  <path d="M90 10 L110 30" stroke="#ffffff" stroke-width="2"/>
+  <path d="M90 30 L110 10" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="100" cy="20" r="15" stroke="#ffffff" stroke-width="2" fill="none"/>
+</svg>

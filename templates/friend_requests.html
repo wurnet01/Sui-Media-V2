@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="list-page-shell">
+    <div class="page-header-card panel-card">
+        <div>
+            <p class="eyebrow">Network</p>
+            <h1>Friend requests</h1>
+        </div>
+    </div>
+
+    <div class="friend-request-grid">
+        <div class="panel-card list-panel">
+            <div class="section-head"><h4>Received</h4></div>
+            <div class="request-list">
+                {% for request in received_requests %}
+                <div class="request-item">
+                    <a href="{{ url_for('profile', username=request.sender.username) }}" class="request-person">
+                        <img src="{{ url_for('uploaded_file', filename=request.sender.get_profile_picture) }}" alt="{{ request.sender.username }} avatar">
+                        <div>
+                            <strong>{{ request.sender.username }}</strong>
+                            <small>Sent {{ request.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                        </div>
+                    </a>
+                    <div class="request-actions">
+                        <form action="{{ url_for('accept_friend_request', user_id=request.sender.id) }}" method="POST" data-ajax-form="true" class="friend-request-form"><button type="submit" class="action-chip action-chip--solid">Accept</button></form>
+                        <form action="{{ url_for('decline_friend_request', request_id=request.id) }}" method="POST" data-ajax-form="true" class="friend-request-form"><button type="submit" class="ghost-button ghost-button--danger">Decline</button></form>
+                    </div>
+                </div>
+                {% else %}
+                <div class="empty-state-panel compact">
+                    <i class="bi bi-people"></i>
+                    <h4>No requests</h4>
+                    <p>Your incoming requests will appear here.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="panel-card list-panel">
+            <div class="section-head"><h4>Sent</h4></div>
+            <div class="request-list">
+                {% for request in sent_requests %}
+                <div class="request-item">
+                    <a href="{{ url_for('profile', username=request.recipient.username) }}" class="request-person">
+                        <img src="{{ url_for('uploaded_file', filename=request.recipient.get_profile_picture) }}" alt="{{ request.recipient.username }} avatar">
+                        <div>
+                            <strong>{{ request.recipient.username }}</strong>
+                            <small>Sent {{ request.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                        </div>
+                    </a>
+                    <span class="status-pill">Pending</span>
+                </div>
+                {% else %}
+                <div class="empty-state-panel compact">
+                    <i class="bi bi-person-plus"></i>
+                    <h4>No sent requests</h4>
+                    <p>Any request you send will stay here until it’s accepted.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

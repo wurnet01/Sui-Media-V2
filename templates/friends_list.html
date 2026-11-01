@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ user.username }}'s Friends{% endblock %}
+
+{% block content %}
+<div class="list-page-shell">
+    <div class="page-header-card panel-card">
+        <div>
+            <p class="eyebrow">Connections</p>
+            <h1>{{ user.username }}’s friends</h1>
+        </div>
+    </div>
+
+    <div class="panel-card list-panel">
+        <div class="friend-grid">
+            {% for friend in friends %}
+            <a href="{{ url_for('profile', username=friend.username) }}" class="friend-card">
+                <img src="{{ url_for('uploaded_file', filename=friend.get_profile_picture) }}" alt="{{ friend.username }} profile image">
+                <div class="friend-card-copy">
+                    <strong>{{ friend.username }}</strong>
+                    {% if friend.current_city %}<span>{{ friend.current_city }}</span>{% endif %}
+                </div>
+            </a>
+            {% else %}
+            <div class="empty-state-panel compact full-width">
+                <i class="bi bi-people"></i>
+                <h4>No friends yet</h4>
+                <p>{{ user.username }} hasn’t connected with anyone yet.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

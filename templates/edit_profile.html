@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="mb-0">Edit Profile</h2>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Current Profile Picture</label>
+                                    <div class="text-center">
+                                        <img src="{{ url_for('uploaded_file', filename=current_user.get_profile_picture) }}" 
+                                             class="profile-picture mb-2" alt="Current Profile Picture">
+                                    </div>
+                                    <div class="mt-2">
+                                        <label for="profile_picture" class="form-label">Change Profile Picture</label>
+                                        <input type="file" class="form-control" id="profile_picture" name="profile_picture" 
+                                               accept="image/*" onchange="previewImage(this, 'profile-preview')">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Current Cover Photo</label>
+                                    <div class="text-center">
+                                        <img src="{{ url_for('uploaded_file', filename=current_user.get_cover_photo) }}" 
+                                             class="img-fluid rounded mb-2" alt="Current Cover Photo" 
+                                             style="max-height: 200px; width: 100%; object-fit: cover;">
+                                    </div>
+                                    <div class="mt-2">
+                                        <label for="cover_photo" class="form-label">Change Cover Photo</label>
+                                        <input type="file" class="form-control" id="cover_photo" name="cover_photo" 
+                                               accept="image/*" onchange="previewImage(this, 'cover-preview')">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="bio" class="form-label fw-bold">Bio</label>
+                            <textarea class="form-control" id="bio" name="bio" rows="4" 
+                                      placeholder="Tell us about yourself...">{{ current_user.bio }}</textarea>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">Save Changes</button>
+                            <a href="{{ url_for('profile', username=current_user.username) }}" 
+                               class="btn btn-outline-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function previewImage(input, previewId) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById(previewId);
+            if (preview) {
+                preview.src = e.target.result;
+            } else {
+                const img = input.parentElement.parentElement.querySelector('img');
+                if (img) {
+                    img.src = e.target.result;
+                }
+            }
+        }
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+</script>
+{% endblock %}

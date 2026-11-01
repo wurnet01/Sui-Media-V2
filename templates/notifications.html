@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="list-page-shell">
+    <div class="page-header-card panel-card">
+        <div>
+            <p class="eyebrow">Updates</p>
+            <h1>Notifications</h1>
+        </div>
+    </div>
+
+    <div class="panel-card list-panel">
+        <div class="notification-list">
+            {% for notification in notifications %}
+            <div class="notification-item">
+                <div class="notification-icon {% if notification.notification_type == 'like' %}like{% elif notification.notification_type == 'comment' %}comment{% elif notification.notification_type == 'friend_accept' %}success{% else %}info{% endif %}">
+                    {% if notification.notification_type == 'friend_request' %}<i class="bi bi-person-plus-fill"></i>
+                    {% elif notification.notification_type == 'friend_accept' %}<i class="bi bi-people-fill"></i>
+                    {% elif notification.notification_type == 'like' %}<i class="bi bi-heart-fill"></i>
+                    {% elif notification.notification_type == 'comment' %}<i class="bi bi-chat-fill"></i>
+                    {% else %}<i class="bi bi-bell-fill"></i>{% endif %}
+                </div>
+                <div class="notification-copy">
+                    <p>{{ notification.content }}</p>
+                    <small>{{ notification.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-state-panel compact">
+                <i class="bi bi-bell-slash"></i>
+                <h4>No notifications yet</h4>
+                <p>When something happens, it’ll appear here.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,5 @@
+/* Logo SVG as base64 */
+<svg width="200" height="40" xmlns="http://www.w3.org/2000/svg">
+    <text x="10" y="30" font-family="Arial" font-size="30" font-weight="bold" fill="#1877f2">Hadd</text>
+    <text x="85" y="30" font-family="Arial" font-size="30" font-weight="bold" fill="#1c1e21">media</text>
+</svg>

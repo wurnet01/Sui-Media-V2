@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Create Post Form -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form action="{{ url_for('create_post') }}" method="POST" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <textarea class="form-control" name="content" rows="3" placeholder="What's on your mind?"></textarea>
+                </div>
+                <div class="mb-3">
+                    <input type="file" class="form-control" name="media" accept="image/*,video/*">
+                </div>
+                <div class="mb-3">
+                    <select class="form-select" name="feeling">
+                        <option value="">How are you feeling?</option>
+                        <option value="happy">😊 Happy</option>
+                        <option value="sad">😢 Sad</option>
+                        <option value="excited">🎉 Excited</option>
+                        <option value="loved">❤️ Loved</option>
+                        <option value="angry">😠 Angry</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Post</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Posts -->
+    {% for post in posts %}
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <img src="{{ url_for('uploaded_file', filename=post.author.get_profile_picture) }}" 
+                     class="rounded-circle me-2" 
+                     alt="Profile Picture" 
+                     style="width: 40px; height: 40px; object-fit: cover;">
+                <div>
+                    <a href="{{ url_for('profile', username=post.author.username) }}" class="text-decoration-none text-dark">
+                        <strong>{{ post.author.username }}</strong>
+                    </a>
+                    {% if post.feeling %}
+                        is feeling 
+                        {% if post.feeling == 'happy' %}😊 happy
+                        {% elif post.feeling == 'sad' %}😢 sad
+                        {% elif post.feeling == 'excited' %}🎉 excited
+                        {% elif post.feeling == 'loved' %}❤️ loved
+                        {% elif post.feeling == 'angry' %}😠 angry
+                        {% endif %}
+                    {% endif %}
+                    <br>
+                    <small class="text-muted">{{ post.timestamp.strftime('%B %d, %Y at %H:%M') }}</small>
+                </div>
+            </div>
+            {% if post.author == current_user %}
+            <form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure?')">
+                    <i class="bi bi-trash-fill"></i>
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if post.content %}
+            <p class="card-text">{{ post.content }}</p>
+            {% endif %}
+
+            {% if post.link %}
+            <div class="card mt-2 mb-2">
+                <a href="{{ post.link }}" target="_blank" class="text-decoration-none text-dark">
+                    {% if post.link_image %}
+                    <img src="{{ post.link_image }}" class="card-img-top" alt="Link preview">
+                    {% endif %}
+                    <div class="card-body">
+                        {% if post.link_title %}
+                        <h5 class="card-title">{{ post.link_title }}</h5>
+                        {% endif %}
+                        {% if post.link_description %}
+                        <p class="card-text">{{ post.link_description }}</p>
+                        {% endif %}
+                        <p class="card-text"><small class="text-muted">{{ post.link }}</small></p>
+                    </div>
+                </a>
+            </div>
+            {% endif %}
+
+            {% if post.media_file %}
+                {% if post.media_type == 'image' %}
+                    <img src="{{ url_for('uploaded_file', filename=post.media_file) }}" class="img-fluid rounded" alt="Post image">
+                {% elif post.media_type == 'video' %}
+                    <video class="w-100 rounded" controls>
+                        <source src="{{ url_for('uploaded_file', filename=post.media_file) }}" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                {% endif %}
+            {% endif %}
+        </div>
+        <div class="card-footer">
+            <!-- Emoji reactions -->
+            <div class="mb-2">
+                <div class="btn-group">
+                    {% set emoji_list = ['👍', '❤️', '😂', '😮', '😢', '😠'] %}
+                    {% for emoji in emoji_list %}
+                        <form action="{{ url_for('add_emoji', post_id=post.id) }}" method="POST" class="d-inline">
+                            <input type="hidden" name="emoji" value="{{ emoji }}">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                {{ emoji }}
+                                {% set count = post.emojis|selectattr('emoji', 'equalto', emoji)|list|length %}
+                                {% if count > 0 %}
+                                    <span class="badge bg-secondary">{{ count }}</span>
+                                {% endif %}
+                            </button>
+                        </form>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Comments section -->
+            <div class="mt-3">
+                <!-- Comment form -->
+                <form action="{{ url_for('add_comment', post_id=post.id) }}" method="POST" class="mb-3">
+                    <div class="input-group">
+                        <input type="text" class="form-control" name="content" placeholder="Write a comment..." required>
+                        <button type="submit" class="btn btn-primary">Comment</button>
+                    </div>
+                </form>
+
+                <!-- List of comments -->
+                {% for comment in post.comments|sort(attribute='timestamp', reverse=true) %}
+                <div class="d-flex mb-2">
+                    <img src="{{ url_for('uploaded_file', filename=comment.author.get_profile_picture) }}" 
+                         class="rounded-circle me-2" 
+                         alt="Profile Picture" 
+                         style="width: 32px; height: 32px; object-fit: cover;">
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <a href="{{ url_for('profile', username=comment.author.username) }}" class="text-decoration-none text-dark">
+                                    <strong>{{ comment.author.username }}</strong>
+                                </a>
+                                <small class="text-muted ms-2">{{ comment.timestamp.strftime('%B %d, %Y at %H:%M') }}</small>
+                            </div>
+                            {% if comment.author == current_user or post.author == current_user %}
+                            <form action="{{ url_for('delete_comment', comment_id=comment.id) }}" method="POST" class="d-inline">
+                                <button type="submit" class="btn btn-sm" onclick="return confirm('Delete this comment?')">
+                                    <i class="bi bi-x text-danger"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        <p class="mb-0">{{ comment.content }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

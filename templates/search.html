@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="search-page">
+    <div class="panel-card search-panel">
+        <form action="{{ url_for('search') }}" method="GET" class="search-form">
+            <i class="bi bi-search"></i>
+            <input type="text" name="q" value="{{ query }}" placeholder="Search people, communities, or interests" aria-label="Search users">
+            <button type="submit" class="action-chip action-chip--solid">Search</button>
+        </form>
+    </div>
+
+    {% if query %}
+    <div class="panel-card list-panel">
+        <div class="section-head"><h4>Results for “{{ query }}”</h4></div>
+        <div class="search-results">
+            {% for user in users %}
+            <div class="search-result-item">
+                <a href="{{ url_for('profile', username=user.username) }}" class="result-user">
+                    <img src="{{ url_for('uploaded_file', filename=user.get_profile_picture) }}" alt="{{ user.username }} avatar">
+                    <div>
+                        <strong>{{ user.username }}</strong>
+                        {% if user.bio %}<span>{{ user.bio[:100] }}{% if user.bio|length > 100 %}...{% endif %}</span>{% endif %}
+                    </div>
+                </a>
+                {% if user != current_user %}
+                    {% if not current_user.has_sent_friend_request(user) and user not in current_user.friends %}
+                    <form action="{{ url_for('send_friend_request', user_id=user.id) }}" method="POST" data-ajax-form="true" class="friend-request-form">
+                        <button type="submit" class="ghost-button">Add friend</button>
+                    </form>
+                    {% elif user in current_user.friends %}
+                    <span class="status-pill success">Friends</span>
+                    {% else %}
+                    <span class="status-pill">Request sent</span>
+                    {% endif %}
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="empty-state-panel compact">
+                <i class="bi bi-search"></i>
+                <h4>No results found</h4>
+                <p>Try another name or keyword.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

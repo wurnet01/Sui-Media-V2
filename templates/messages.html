@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="messages-page">
+    <aside class="panel-card messages-sidebar">
+        <div class="section-head"><h4>Messages</h4></div>
+        {% set participants = [] %}
+        {% for message in messages_received %}
+            {% if message.sender_id not in participants %}
+                {% set _ = participants.append(message.sender_id) %}
+            {% endif %}
+        {% endfor %}
+        {% for message in messages_sent %}
+            {% if message.recipient_id not in participants %}
+                {% set _ = participants.append(message.recipient_id) %}
+            {% endif %}
+        {% endfor %}
+        {% if participants %}
+            <div class="conversation-list">
+                {% for participant_id in participants %}
+                    {% set other_user = user_query.get(participant_id) %}
+                    {% if other_user %}
+                    <a href="?user={{ other_user.id }}" class="conversation-item {% if request.args.get('user') == other_user.id|string %}active{% endif %}">
+                        <img src="{{ url_for('uploaded_file', filename=other_user.get_profile_picture) }}" alt="{{ other_user.username }} avatar">
+                        <div>
+                            <strong>{{ other_user.username }}</strong>
+                            <small>Open conversation</small>
+                        </div>
+                    </a>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        {% else %}
+        <div class="empty-state-panel compact">
+            <i class="bi bi-chat-left-text"></i>
+            <h4>No conversations</h4>
+            <p>Your chat threads will appear here.</p>
+        </div>
+        {% endif %}
+    </aside>
+
+    <section class="panel-card chat-panel">
+        {% if request.args.get('user') %}
+            {% set other_user = user_query.get(request.args.get('user')|int) %}
+            {% if other_user %}
+                <div class="chat-header">
+                    <div class="chat-user">
+                        <img src="{{ url_for('uploaded_file', filename=other_user.get_profile_picture) }}" alt="{{ other_user.username }} avatar">
+                        <div>
+                            <strong>{{ other_user.username }}</strong>
+                            <small>{% if other_user.is_online %}Online now{% else %}Away{% endif %}</small>
+                        </div>
+                    </div>
+                </div>
+                {% set conversation = (messages_sent + messages_received)|selectattr('sender_id', 'equalto', other_user.id)|list + (messages_sent + messages_received)|selectattr('recipient_id', 'equalto', other_user.id)|list %}
+                <div class="message-thread">
+                    {% for message in conversation|sort(attribute='timestamp') %}
+                    <div class="bubble-row {% if message.sender_id == current_user.id %}outgoing{% endif %}">
+                        <div class="message-bubble {% if message.sender_id == current_user.id %}mine{% else %}theirs{% endif %}">
+                            {% if message.content %}<p>{{ message.content }}</p>{% endif %}
+                            {% if message.media_file %}
+                                {% if message.media_type == 'image' %}<img src="{{ url_for('uploaded_file', filename=message.media_file) }}" alt="Message image">
+                                {% elif message.media_type == 'video' %}<video controls><source src="{{ url_for('uploaded_file', filename=message.media_file) }}" type="video/mp4"></video>{% endif %}
+                            {% endif %}
+                            <small>{{ message.timestamp.strftime('%H:%M') }}</small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="chat-composer">
+                    <form method="POST" action="{{ url_for('send_message', recipient_id=other_user.id) }}" enctype="multipart/form-data">
+                        <div class="composer-input-row">
+                            <input type="text" name="content" placeholder="Write a message..." aria-label="Message content">
+                            <label class="mini-upload" for="message-media"><i class="bi bi-paperclip"></i><input type="file" id="message-media" name="media" accept="image/*,video/*"></label>
+                            <button type="submit" class="action-chip action-chip--solid">Send</button>
+                        </div>
+                        <small class="selected-media d-none" id="selected-media">No file selected</small>
+                    </form>
+                </div>
+                <script>
+                    const messageMediaInput = document.getElementById('message-media');
+                    if (messageMediaInput) {
+                        messageMediaInput.addEventListener('change', function() {
+                            const fileInfo = document.getElementById('selected-media');
+                            if (this.files.length > 0) {
+                                fileInfo.textContent = 'Selected: ' + this.files[0].name;
+                                fileInfo.classList.remove('d-none');
+                            } else {
+                                fileInfo.classList.add('d-none');
+                            }
+                        });
+                    }
+                </script>
+            {% else %}
+            <div class="empty-state-panel compact full-size">
+                <i class="bi bi-person-bounding-box"></i>
+                <h4>Conversation unavailable</h4>
+                <p>Try selecting another contact.</p>
+            </div>
+            {% endif %}
+        {% else %}
+        <div class="empty-state-panel compact full-size">
+            <i class="bi bi-chat-left-text"></i>
+            <h4>Select a conversation</h4>
+            <p>Choose someone from the sidebar to start messaging.</p>
+        </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
