@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_socketio import SocketIO, emit, join_room
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -19,16 +20,28 @@ except ImportError:
     LINK_PREVIEW_ENABLED = False
 
 app = Flask(__name__)
-secret_key = os.environ.get('SECRET_KEY') or 'dev-only-change-me-in-production'
-app.config['SECRET_KEY'] = secret_key
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = False
+secret_key = os.environ.get('SECRET_KEY')
+if not secret_key:
+    if os.environ.get('FLASK_DEBUG') == '1' or os.environ.get('PYTEST_CURRENT_TEST'):
+        secret_key = 'local-development-only-change-this-key'
+    else:
+        # Keep local imports convenient, but deployment documentation requires a real secret.
+        secret_key = 'unsafe-development-key-set-SECRET_KEY-before-deploying'
+app.config.update(
+    SECRET_KEY=secret_key,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=os.environ.get('COOKIE_SECURE', 'auto').lower() != 'false' and os.environ.get('FLASK_DEBUG') != '1',
+    PERMANENT_SESSION_LIFETIME=timedelta(days=14),
+    PREFERRED_URL_SCHEME='https' if os.environ.get('COOKIE_SECURE', 'auto').lower() != 'false' else 'http',
+)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*")
+allowed_origins = [origin.strip() for origin in os.environ.get('SOCKETIO_ALLOWED_ORIGINS', '').split(',') if origin.strip()]
+socketio = SocketIO(app, cors_allowed_origins=allowed_origins or None, manage_session=True)
 ALLOWED_EXTENSIONS = {
     'image': {'png', 'jpg', 'jpeg', 'gif', 'webp'},
     'video': {'mp4', 'webm', 'mov'}
@@ -41,6 +54,9 @@ def security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    if request.is_secure:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     response.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self'; media-src 'self'"
     return response
 
@@ -426,8 +442,10 @@ def settings():
     settings = current_user.get_settings()
     if request.method == 'POST':
         show_online = request.form.get('show_online_status') == 'on'
-        theme = request.form.get('theme', 'light')
-        
+        theme = request.form.get('theme', 'dark')
+        if theme not in {'light', 'dark', 'dynamic'}:
+            flash('Choose a valid theme.', 'error')
+            return redirect(url_for('settings'))
         settings.show_online_status = show_online
         settings.theme = theme
         db.session.commit()
@@ -440,11 +458,18 @@ def settings():
 @login_required
 def block_user(user_id):
     user = User.query.get_or_404(user_id)
-    if user == current_user:
+    if user == current_user or user.has_blocked(current_user) or current_user.has_blocked(user):
         flash('You cannot block yourself!', 'error')
         return redirect(url_for('profile', username=user.username))
     
     current_user.block_user(user)
+    FriendRequest.query.filter(
+        db.or_(
+            db.and_(FriendRequest.sender_id == current_user.id, FriendRequest.recipient_id == user.id),
+            db.and_(FriendRequest.sender_id == user.id, FriendRequest.recipient_id == current_user.id)
+        )
+    ).delete(synchronize_session=False)
+    db.session.commit()
     flash(f'You have blocked {user.username}', 'success')
     return redirect(url_for('profile', username=user.username))
 
@@ -1146,17 +1171,23 @@ def delete_notification(notification_id):
 @app.route('/send_message/<int:recipient_id>', methods=['POST'])
 @login_required
 def send_message(recipient_id):
-    content = request.form['content']
+    recipient = User.query.get_or_404(recipient_id)
+    if recipient.id == current_user.id or current_user.has_blocked(recipient) or current_user.is_blocked_by(recipient):
+        return jsonify({'status': 'error', 'message': 'Messaging is unavailable for this account.'}), 403 if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect(url_for('messages'))
+    content = sanitize_text(request.form.get('content', ''))[:5000]
     media = request.files.get('media')
     
-    if content or media:
+    if content or (media and media.filename):
         media_type = None
         media_filename = None
         
-        if media:
+        if media and media.filename:
             media_type = get_file_type(media.filename)
-            if media_type:
-                media_filename = save_media(media, media_type)
+            if not media_type:
+                return jsonify({'status': 'error', 'message': 'Unsupported attachment type.'}), 400
+            media_filename = save_media(media, media_type)
+            if not media_filename:
+                return jsonify({'status': 'error', 'message': 'Attachment upload failed.'}), 400
         
         message = Message(
             sender_id=current_user.id,
@@ -1272,6 +1303,17 @@ def init_database():
         db.create_all()
         print('Database schema checked; existing data preserved.')
 
+@app.route('/healthz')
+def healthz():
+    """Lightweight platform health check; does not expose application data."""
+    try:
+        db.session.execute(db.text('SELECT 1'))
+        return jsonify({'status': 'ok', 'database': 'ok'}), 200
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('Health check database probe failed')
+        return jsonify({'status': 'error'}), 503
+
 @app.route('/notifications/unread')
 @login_required
 def check_unread_notifications():
@@ -1297,7 +1339,13 @@ def handle_disconnect():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    socketio.run(app, debug=os.environ.get('FLASK_DEBUG') == '1')
+    socketio.run(
+        app,
+        host='0.0.0.0',
+        port=int(os.environ.get('PORT', '5000')),
+        debug=os.environ.get('FLASK_DEBUG') == '1',
+        allow_unsafe_werkzeug=os.environ.get('FLASK_DEBUG') == '1'
+    )
 
 
 
