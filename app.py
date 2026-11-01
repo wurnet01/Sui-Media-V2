@@ -17,6 +17,8 @@ from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 try:
     import requests
     from bs4 import BeautifulSoup
@@ -47,6 +49,14 @@ app.config.update(
     WTF_CSRF_TIME_LIMIT=3600,
 )
 csrf = CSRFProtect(app)
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    storage_uri=os.environ.get('RATELIMIT_STORAGE_URI', 'memory://'),
+    strategy='fixed-window',
+    default_limits=[],
+)
+app.config['RATELIMIT_HEADERS_ENABLED'] = True
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
@@ -495,6 +505,7 @@ def unblock_user(user_id):
 
 @app.route('/report/<int:user_id>', methods=['POST'])
 @login_required
+@limiter.limit('10 per hour')
 def report_user(user_id):
     user = User.query.get_or_404(user_id)
     if user.id == current_user.id:
@@ -612,6 +623,7 @@ def index():
     return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
+@limiter.limit('5 per hour')
 def register():
     if request.method == 'POST':
         username = validate_username(request.form.get('username', ''))
@@ -648,6 +660,7 @@ def register():
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit('10 per minute')
 def login():
     if request.method == 'POST':
         username = validate_username(request.form.get('username', ''))
@@ -789,6 +802,7 @@ def uploaded_file(filename):
 
 @app.route('/create_post', methods=['POST'])
 @login_required
+@limiter.limit('30 per hour')
 def create_post():
     content = request.form.get('content', '')
     media = request.files.get('media')
@@ -837,6 +851,7 @@ def create_post():
 
 @app.route('/create_story', methods=['POST'])
 @login_required
+@limiter.limit('10 per hour')
 def create_story():
     caption = sanitize_text(request.form.get('caption', ''))
     media = request.files.get('story_media')
@@ -953,6 +968,7 @@ def like_post(post_id):
 
 @app.route('/comment/<int:post_id>', methods=['POST'])
 @login_required
+@limiter.limit('60 per hour')
 def add_comment(post_id):
     content = sanitize_text(request.form.get('content', ''))
     if not content:
@@ -1237,6 +1253,7 @@ def delete_notification(notification_id):
 
 @app.route('/send_message/<int:recipient_id>', methods=['POST'])
 @login_required
+@limiter.limit('120 per hour')
 def send_message(recipient_id):
     recipient = User.query.get_or_404(recipient_id)
     if recipient.id == current_user.id or current_user.has_blocked(recipient) or current_user.is_blocked_by(recipient):
@@ -1324,6 +1341,7 @@ def friend_requests():
 
 @app.route('/send_friend_request/<int:user_id>', methods=['POST'])
 @login_required
+@limiter.limit('30 per hour')
 def send_friend_request(user_id):
     user = User.query.get_or_404(user_id)
     if user.id == current_user.id:
