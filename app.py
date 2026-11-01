@@ -12,15 +12,18 @@ import uuid
 from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
 from flask_migrate import Migrate
+from flask_wtf.csrf import CSRFProtect
 try:
     import requests
     from bs4 import BeautifulSoup
-    LINK_PREVIEW_ENABLED = True
+    LINK_PREVIEW_ENABLED = os.environ.get('ENABLE_LINK_PREVIEWS') == '1'
 except ImportError:
     LINK_PREVIEW_ENABLED = False
 
 app = Flask(__name__)
 secret_key = os.environ.get('SECRET_KEY')
+if not secret_key and (os.environ.get('APP_ENV') == 'production' or os.environ.get('RENDER')):
+    raise RuntimeError('SECRET_KEY must be configured in production.')
 if not secret_key:
     if os.environ.get('FLASK_DEBUG') == '1' or os.environ.get('PYTEST_CURRENT_TEST'):
         secret_key = 'local-development-only-change-this-key'
@@ -34,7 +37,10 @@ app.config.update(
     SESSION_COOKIE_SECURE=os.environ.get('COOKIE_SECURE', 'auto').lower() != 'false' and os.environ.get('FLASK_DEBUG') != '1',
     PERMANENT_SESSION_LIFETIME=timedelta(days=14),
     PREFERRED_URL_SCHEME='https' if os.environ.get('COOKIE_SECURE', 'auto').lower() != 'false' else 'http',
+    WTF_CSRF_ENABLED=True,
+    WTF_CSRF_TIME_LIMIT=3600,
 )
+csrf = CSRFProtect(app)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
