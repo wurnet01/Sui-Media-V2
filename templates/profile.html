@@ -32,7 +32,7 @@
                 <div class="profile-actions">
                     {% if not current_user.has_blocked(user) %}
                         {% if user not in current_user.friends and not current_user.has_sent_friend_request(user) %}
-                            <form action="{{ url_for('send_friend_request', user_id=user.id) }}" method="POST" data-ajax-form="true" class="friend-request-form">
+                            <form action="{{ url_for('send_friend_request', user_id=user.id) }}" method="POST" data-ajax-form="true" class="friend-request-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="action-chip action-chip--solid"><i class="bi bi-person-plus"></i> Add friend</button>
                             </form>
                         {% elif user in current_user.friends %}
@@ -41,11 +41,11 @@
                             <span class="action-chip action-chip--muted"><i class="bi bi-clock-history"></i> Request sent</span>
                         {% endif %}
                         <a href="{{ url_for('messages') }}?user={{ user.id }}" class="action-chip"><i class="bi bi-chat-left-text"></i> Message</a>
-                        <form action="{{ url_for('block_user', user_id=user.id) }}" method="POST">
+                        <form action="{{ url_for('block_user', user_id=user.id) }}" method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="action-chip action-chip--danger"><i class="bi bi-slash-circle"></i> Block</button>
                         </form>
                     {% else %}
-                        <form action="{{ url_for('unblock_user', user_id=user.id) }}" method="POST">
+                        <form action="{{ url_for('unblock_user', user_id=user.id) }}" method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="action-chip action-chip--danger"><i class="bi bi-slash-circle-fill"></i> Unblock</button>
                         </form>
                     {% endif %}
@@ -107,7 +107,7 @@
                         <div class="dropdown">
                             <button class="btn btn-link muted-dot" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-three-dots"></i></button>
                             <ul class="dropdown-menu dropdown-menu-end menu-card">
-                                <li><form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST"><button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete post</button></form></li>
+                                <li><form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete post</button></form></li>
                             </ul>
                         </div>
                         {% endif %}
@@ -121,7 +121,7 @@
                         <div class="comment-summary"><span>{{ post.comments|length }} comments</span></div>
                     </div>
                     <div class="post-actions">
-                        <form method="POST" action="{{ url_for('like_post', post_id=post.id) }}" class="post-action-form">
+                        <form method="POST" action="{{ url_for('like_post', post_id=post.id) }}" class="post-action-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="action-btn small"><i class="bi bi-heart-fill"></i> Like</button>
                         </form>
                         <button type="button" class="action-btn small"><i class="bi bi-chat-left-text"></i> Comment</button>
