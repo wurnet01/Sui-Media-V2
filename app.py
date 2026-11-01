@@ -888,6 +888,8 @@ def create_story():
 @login_required
 def view_story(story_id):
     story = Story.query.get_or_404(story_id)
+    if story.user_id != current_user.id and (current_user.has_blocked(story.user) or current_user.is_blocked_by(story.user)):
+        return jsonify({'status': 'error', 'message': 'This story is unavailable.'}), 403
     if story.is_expired:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({'status': 'expired'}), 410
@@ -913,6 +915,8 @@ def view_story(story_id):
 @login_required
 def react_to_story(story_id):
     story = Story.query.get_or_404(story_id)
+    if story.user_id != current_user.id and (current_user.has_blocked(story.user) or current_user.is_blocked_by(story.user)):
+        return jsonify({'status': 'error', 'message': 'This story is unavailable.'}), 403
     if story.is_expired:
         return jsonify({'status': 'error', 'message': 'This story has expired.'}), 410
     reaction_type = (request.form.get('reaction_type') or 'like').strip().lower()
@@ -930,6 +934,8 @@ def react_to_story(story_id):
 @login_required
 def reply_to_story(story_id):
     story = Story.query.get_or_404(story_id)
+    if story.user_id != current_user.id and (current_user.has_blocked(story.user) or current_user.is_blocked_by(story.user)):
+        return jsonify({'status': 'error', 'message': 'This story is unavailable.'}), 403
     if story.is_expired:
         return jsonify({'status': 'error', 'message': 'This story has expired.'}), 410
     content = sanitize_text(request.form.get('content', ''))[:2000]
@@ -1124,6 +1130,8 @@ def delete_comment(comment_id):
 @login_required
 def profile(username):
     user = User.query.filter_by(username=username).first_or_404()
+    if user.has_blocked(current_user):
+        return render_template('index.html', posts=[], stories=[], suggest_users=[], active_feed='for-you'), 404
     posts = Post.query.filter_by(user_id=user.id).order_by(Post.timestamp.desc()).all()
     is_friend = current_user.is_friend(user)
     has_sent_request = current_user.has_sent_friend_request(user)
@@ -1209,11 +1217,17 @@ def friends_list(username):
 def search():
     query = request.args.get('q', '')
     if query:
-        users = User.query.filter(
+        blocked_ids = [row.blocked_user_id for row in BlockedUser.query.filter_by(user_id=current_user.id).all()]
+        blocked_by_ids = [row.user_id for row in BlockedUser.query.filter_by(blocked_user_id=current_user.id).all()]
+        excluded_ids = blocked_ids + blocked_by_ids
+        users_query = User.query.filter(
             (User.username.ilike(f'%{query}%')) |
             (User.email.ilike(f'%{query}%')) |
             (User.bio.ilike(f'%{query}%'))
-        ).all()
+        )
+        if excluded_ids:
+            users_query = users_query.filter(~User.id.in_(excluded_ids))
+        users = users_query.all()
     else:
         users = []
     return render_template('search.html', users=users, query=query)
