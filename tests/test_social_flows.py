@@ -3,6 +3,9 @@ import uuid
 
 from app import User, Post, Story, app, db
 
+# Route-flow tests focus on application behaviour; CSRF is exercised separately in production configuration.
+app.config['WTF_CSRF_ENABLED'] = False
+
 
 def _create_user(username_prefix='pytestuser'):
     username = f"{username_prefix}{uuid.uuid4().hex[:8]}"
