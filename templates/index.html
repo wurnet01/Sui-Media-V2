@@ -69,8 +69,7 @@
                 </div>
                 <div class="composer-toolbar">
                     <label class="composer-action" for="media"><i class="bi bi-image-fill"></i><span>Photo</span><input type="file" class="d-none" id="media" name="media" accept="image/*,video/*"></label>
-                    <button type="button" class="composer-action" data-bs-toggle="modal" data-bs-target="#feelingModal"><i class="bi bi-emoji-smile"></i><span>Feeling</span></button>
-                    <button type="button" class="composer-action"><i class="bi bi-geo-alt-fill"></i><span>Location</span></button>
+                    <button type="button" class="composer-action" data-bs-toggle="modal" data-bs-target="#feelingModal"><i class="bi bi-emoji-smile"></i><span id="feelingLabel">Feeling</span></button>
                     <button type="submit" class="btn btn-primary publish-btn">Post</button>
                 </div>
                 <input type="hidden" name="feeling" id="selectedFeeling" value="">
@@ -228,6 +227,31 @@
             </div>
         </div>
     </aside>
+</div>
+
+
+<div class="modal fade" id="feelingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content panel-card modal-panel">
+            <div class="modal-header">
+                <h5 class="modal-title">How are you feeling?</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="feeling-grid">
+                    <button type="button" class="feeling-btn" data-feeling="😊 Feeling happy">😊 Happy</button>
+                    <button type="button" class="feeling-btn" data-feeling="😎 Feeling cool">😎 Cool</button>
+                    <button type="button" class="feeling-btn" data-feeling="❤️ Feeling loved">❤️ Loved</button>
+                    <button type="button" class="feeling-btn" data-feeling="🎉 Celebrating">🎉 Celebrating</button>
+                    <button type="button" class="feeling-btn" data-feeling="🤔 Thinking">🤔 Thinking</button>
+                    <button type="button" class="feeling-btn" data-feeling="🙏 Grateful">🙏 Grateful</button>
+                    <button type="button" class="feeling-btn" data-feeling="💪 Motivated">💪 Motivated</button>
+                    <button type="button" class="feeling-btn" data-feeling="😴 Tired">😴 Tired</button>
+                </div>
+                <button type="button" class="ghost-button mt-3" data-clear-feeling>Clear feeling</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="storyComposerModal" tabindex="-1" aria-hidden="true">
