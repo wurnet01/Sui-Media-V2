@@ -543,8 +543,27 @@ def load_user(user_id):
 def index():
     if current_user.is_authenticated:
         posts = Post.query.order_by(Post.timestamp.desc()).all()
-        active_story_rows = Story.query.filter(Story.expires_at > datetime.utcnow()).order_by(Story.created_at.desc()).all()
-        suggest_users = User.query.filter(User.id != current_user.id).limit(6).all()
+        active_story_rows = Story.query.filter(
+            Story.expires_at > datetime.utcnow()
+        ).order_by(Story.created_at.desc()).all()
+
+        # Recommendations must be genuine accounts and must not include the
+        # current user, existing friends, or either side of a block.
+        friend_ids = [friend.id for friend in current_user.friends.all()]
+        blocked_ids = [
+            row.blocked_user_id
+            for row in BlockedUser.query.filter_by(user_id=current_user.id).all()
+        ]
+        blocked_by_ids = [
+            row.user_id
+            for row in BlockedUser.query.filter_by(blocked_user_id=current_user.id).all()
+        ]
+        excluded_ids = set(friend_ids + blocked_ids + blocked_by_ids + [current_user.id])
+        suggestions_query = User.query
+        if excluded_ids:
+            suggestions_query = suggestions_query.filter(~User.id.in_(excluded_ids))
+        suggest_users = suggestions_query.order_by(User.id.desc()).limit(6).all()
+
         return render_template('index.html', posts=posts, stories=active_story_rows, suggest_users=suggest_users)
     return redirect(url_for('login'))
 
@@ -858,9 +877,35 @@ def add_comment(post_id):
         flash('Comment cannot be empty', 'error')
         return redirect(request.referrer or url_for('index'))
 
-    parent_id = request.form.get('parent_id')
-    comment = Comment(content=content, user_id=current_user.id, post_id=post_id, parent_id=int(parent_id) if parent_id and parent_id.isdigit() else None)
+    post = Post.query.get_or_404(post_id)
+    parent_id_raw = request.form.get('parent_id', '').strip()
+    parent = None
+    if parent_id_raw:
+        if not parent_id_raw.isdigit():
+            return jsonify({'status': 'error', 'message': 'Invalid reply target'}), 400
+        parent = Comment.query.filter_by(id=int(parent_id_raw), post_id=post.id).first()
+        if parent is None or parent.parent_id is not None:
+            return jsonify({'status': 'error', 'message': 'The comment you are replying to does not exist'}), 404
+
+    comment = Comment(
+        content=content[:5000],
+        user_id=current_user.id,
+        post_id=post.id,
+        parent_id=parent.id if parent else None
+    )
     db.session.add(comment)
+
+    # Persist an actual notification for the post owner or parent-comment author.
+    notification_target = parent.author if parent else post.author
+    if notification_target.id != current_user.id:
+        db.session.add(Notification(
+            user_id=notification_target.id,
+            content=(
+                f'{current_user.username} replied to your comment.'
+                if parent else f'{current_user.username} commented on your post.'
+            ),
+            notification_type='comment_reply' if parent else 'comment'
+        ))
     db.session.commit()
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
