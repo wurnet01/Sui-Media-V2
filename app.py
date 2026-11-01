@@ -7,6 +7,7 @@ from werkzeug.utils import secure_filename
 from db_config import db, init_db
 from datetime import datetime, timedelta
 import os
+from dotenv import load_dotenv
 import re
 import uuid
 import ipaddress
@@ -22,6 +23,8 @@ try:
     LINK_PREVIEW_ENABLED = os.environ.get('ENABLE_LINK_PREVIEWS') == '1'
 except ImportError:
     LINK_PREVIEW_ENABLED = False
+
+load_dotenv()
 
 app = Flask(__name__)
 secret_key = os.environ.get('SECRET_KEY')
