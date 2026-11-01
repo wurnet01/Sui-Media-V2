@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+ENV/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Local databases and instance data
+*.db
+*.sqlite
+*.sqlite3
+instance/*
+!instance/.gitkeep
+
+# User uploads are runtime data, never source code
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Tooling
+.DS_Store
+.vscode/
+.idea/
