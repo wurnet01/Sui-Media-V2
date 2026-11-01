@@ -23,6 +23,8 @@ services:
         fromDatabase:
           name: hdm-postgres
           property: connectionString
+      - key: RATELIMIT_STORAGE_URI
+        value: memory://
       - key: COOKIE_SECURE
         value: "true"
       - key: FLASK_DEBUG
