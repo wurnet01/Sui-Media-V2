@@ -836,6 +836,8 @@ def view_story(story_id):
         'caption': story.caption or '',
         'media_url': url_for('uploaded_file', filename=story.media_file) if story.media_file else '',
         'username': story.user.username,
+        'media_type': story.media_type,
+        'avatar_url': url_for('uploaded_file', filename=story.user.get_profile_picture),
         'views': StoryView.query.filter_by(story_id=story.id).count(),
     })
 
@@ -843,6 +845,8 @@ def view_story(story_id):
 @login_required
 def react_to_story(story_id):
     story = Story.query.get_or_404(story_id)
+    if story.is_expired:
+        return jsonify({'status': 'error', 'message': 'This story has expired.'}), 410
     reaction_type = (request.form.get('reaction_type') or 'like').strip().lower()
     if reaction_type not in {'like', 'love', 'wow', 'fire'}:
         reaction_type = 'like'
@@ -858,11 +862,15 @@ def react_to_story(story_id):
 @login_required
 def reply_to_story(story_id):
     story = Story.query.get_or_404(story_id)
-    content = sanitize_text(request.form.get('content', ''))
+    if story.is_expired:
+        return jsonify({'status': 'error', 'message': 'This story has expired.'}), 410
+    content = sanitize_text(request.form.get('content', ''))[:2000]
     if not content:
         return jsonify({'status': 'error', 'message': 'Reply cannot be empty'}), 400
     reply = StoryReply(story_id=story.id, user_id=current_user.id, content=content)
     db.session.add(reply)
+    if story.user_id != current_user.id:
+        db.session.add(Notification(user_id=story.user_id, content=f'{current_user.username} replied to your story.', notification_type='story_reply'))
     db.session.commit()
     return jsonify({'status': 'ok', 'username': current_user.username, 'content': content})
 
@@ -1173,7 +1181,10 @@ def delete_notification(notification_id):
 def send_message(recipient_id):
     recipient = User.query.get_or_404(recipient_id)
     if recipient.id == current_user.id or current_user.has_blocked(recipient) or current_user.is_blocked_by(recipient):
-        return jsonify({'status': 'error', 'message': 'Messaging is unavailable for this account.'}), 403 if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else redirect(url_for('messages'))
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'status': 'error', 'message': 'Messaging is unavailable for this account.'}), 403
+        flash('Messaging is unavailable for this account.', 'error')
+        return redirect(url_for('messages'))
     content = sanitize_text(request.form.get('content', ''))[:5000]
     media = request.files.get('media')
     
