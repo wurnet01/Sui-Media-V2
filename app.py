@@ -774,6 +774,8 @@ def get_file_type(filename):
 
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
+    if filename in {'default-avatar.svg', 'default-cover.svg'}:
+        return send_from_directory(os.path.join(app.root_path, 'static', 'images'), filename)
     # Split the path into media type and actual filename
     if '/' in filename:
         media_type, actual_filename = filename.split('/', 1)
@@ -1190,7 +1192,7 @@ def messages():
         if selected_user.id == current_user.id or current_user.has_blocked(selected_user) or current_user.is_blocked_by(selected_user):
             flash('This conversation is unavailable.', 'error')
             return redirect(url_for('messages'))
-        Message.query.filter_by(sender_id=selected_user.id, recipient_id=current_user.id, is_read=False).update({'is_read': True})
+        Message.query.filter_by(sender_id=selected_user.id, recipient_id=current_user.id, is_read=False).update({'is_read': True}, synchronize_session='fetch')
         db.session.commit()
     return render_template('messages.html',
                          messages_received=messages_received,
