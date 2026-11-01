@@ -573,7 +573,14 @@ def load_user(user_id):
 @app.route('/')
 def index():
     if current_user.is_authenticated:
-        posts = Post.query.order_by(Post.timestamp.desc()).all()
+        active_feed = request.args.get('feed', 'for-you')
+        if active_feed not in {'for-you', 'following', 'recent'}:
+            active_feed = 'for-you'
+        posts_query = Post.query.order_by(Post.timestamp.desc())
+        if active_feed == 'following':
+            followed_ids = [friend.id for friend in current_user.friends.all()]
+            posts_query = posts_query.filter(Post.user_id.in_(followed_ids + [current_user.id]))
+        posts = posts_query.all()
         active_story_rows = Story.query.filter(
             Story.expires_at > datetime.utcnow()
         ).order_by(Story.created_at.desc()).all()
@@ -595,7 +602,7 @@ def index():
             suggestions_query = suggestions_query.filter(~User.id.in_(excluded_ids))
         suggest_users = suggestions_query.order_by(User.id.desc()).limit(6).all()
 
-        return render_template('index.html', posts=posts, stories=active_story_rows, suggest_users=suggest_users)
+        return render_template('index.html', posts=posts, stories=active_story_rows, suggest_users=suggest_users, active_feed=active_feed)
     return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
