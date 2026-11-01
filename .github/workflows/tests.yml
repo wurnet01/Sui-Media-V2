@@ -1,0 +1,22 @@
+name: tests
+
+on:
+  push:
+    branches: [main, feature/hdm-functional-overhaul]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+        env:
+          SECRET_KEY: ci-test-secret-key
+          FLASK_DEBUG: "1"
+          DATABASE_URL: sqlite:////tmp/hdm-ci.db

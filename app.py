@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_socketio import SocketIO, emit, join_room
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -6,29 +7,63 @@ from werkzeug.utils import secure_filename
 from db_config import db, init_db
 from datetime import datetime, timedelta
 import os
+from dotenv import load_dotenv
 import re
 import uuid
+import ipaddress
+import socket
+from urllib.parse import urlsplit
 from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
 from flask_migrate import Migrate
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 try:
     import requests
     from bs4 import BeautifulSoup
-    LINK_PREVIEW_ENABLED = True
+    LINK_PREVIEW_ENABLED = os.environ.get('ENABLE_LINK_PREVIEWS') == '1'
 except ImportError:
     LINK_PREVIEW_ENABLED = False
 
+load_dotenv()
+
 app = Flask(__name__)
-secret_key = os.environ.get('SECRET_KEY') or 'dev-only-change-me-in-production'
-app.config['SECRET_KEY'] = secret_key
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = False
+secret_key = os.environ.get('SECRET_KEY')
+if not secret_key and (os.environ.get('APP_ENV') == 'production' or os.environ.get('RENDER')):
+    raise RuntimeError('SECRET_KEY must be configured in production.')
+if not secret_key:
+    if os.environ.get('FLASK_DEBUG') == '1' or os.environ.get('PYTEST_CURRENT_TEST'):
+        secret_key = 'local-development-only-change-this-key'
+    else:
+        # Keep local imports convenient, but deployment documentation requires a real secret.
+        secret_key = 'unsafe-development-key-set-SECRET_KEY-before-deploying'
+app.config.update(
+    SECRET_KEY=secret_key,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=os.environ.get('COOKIE_SECURE', 'auto').lower() != 'false' and os.environ.get('FLASK_DEBUG') != '1',
+    PERMANENT_SESSION_LIFETIME=timedelta(days=14),
+    PREFERRED_URL_SCHEME='https' if os.environ.get('COOKIE_SECURE', 'auto').lower() != 'false' else 'http',
+    WTF_CSRF_ENABLED=True,
+    WTF_CSRF_TIME_LIMIT=3600,
+    RATELIMIT_HEADERS_ENABLED=True,
+)
+csrf = CSRFProtect(app)
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    storage_uri=os.environ.get('RATELIMIT_STORAGE_URI', 'memory://'),
+    strategy='fixed-window',
+    default_limits=[],
+)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*")
+allowed_origins = [origin.strip() for origin in os.environ.get('SOCKETIO_ALLOWED_ORIGINS', '').split(',') if origin.strip()]
+socketio = SocketIO(app, cors_allowed_origins=allowed_origins or None, manage_session=True)
 ALLOWED_EXTENSIONS = {
     'image': {'png', 'jpg', 'jpeg', 'gif', 'webp'},
     'video': {'mp4', 'webm', 'mov'}
@@ -41,6 +76,9 @@ def security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    if request.is_secure:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     response.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self'; media-src 'self'"
     return response
 
@@ -213,9 +251,9 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
-    profile_picture = db.Column(db.String(200), default='default.jpg')
+    profile_picture = db.Column(db.String(200), default='default-avatar.svg')
     bio = db.Column(db.Text, default='')
-    cover_photo = db.Column(db.String(200), default='default_cover.jpg')
+    cover_photo = db.Column(db.String(200), default='default-cover.svg')
     date_of_birth = db.Column(db.Date, nullable=True)
     place_of_birth = db.Column(db.String(100), nullable=True)
     marital_status = db.Column(db.String(20), nullable=True)  # Single, Married, etc.
@@ -254,7 +292,7 @@ class User(UserMixin, db.Model):
     @property
     def get_profile_picture(self):
         if not self.profile_picture:
-            return 'default.jpg'
+            return 'default-avatar.svg'
         if '/' in self.profile_picture:
             return self.profile_picture
         if not os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], self.profile_picture)):
@@ -350,7 +388,7 @@ class User(UserMixin, db.Model):
     @property
     def get_cover_photo(self):
         if not self.cover_photo or not os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], self.cover_photo)):
-            return 'default_cover.jpg'
+            return 'default-cover.svg'
         return self.cover_photo
     
     def send_friend_request(self, user):
@@ -426,8 +464,10 @@ def settings():
     settings = current_user.get_settings()
     if request.method == 'POST':
         show_online = request.form.get('show_online_status') == 'on'
-        theme = request.form.get('theme', 'light')
-        
+        theme = request.form.get('theme', 'dark')
+        if theme not in {'light', 'dark', 'dynamic'}:
+            flash('Choose a valid theme.', 'error')
+            return redirect(url_for('settings'))
         settings.show_online_status = show_online
         settings.theme = theme
         db.session.commit()
@@ -440,11 +480,18 @@ def settings():
 @login_required
 def block_user(user_id):
     user = User.query.get_or_404(user_id)
-    if user == current_user:
+    if user == current_user or user.has_blocked(current_user) or current_user.has_blocked(user):
         flash('You cannot block yourself!', 'error')
         return redirect(url_for('profile', username=user.username))
     
     current_user.block_user(user)
+    FriendRequest.query.filter(
+        db.or_(
+            db.and_(FriendRequest.sender_id == current_user.id, FriendRequest.recipient_id == user.id),
+            db.and_(FriendRequest.sender_id == user.id, FriendRequest.recipient_id == current_user.id)
+        )
+    ).delete(synchronize_session=False)
+    db.session.commit()
     flash(f'You have blocked {user.username}', 'success')
     return redirect(url_for('profile', username=user.username))
 
@@ -458,6 +505,7 @@ def unblock_user(user_id):
 
 @app.route('/report/<int:user_id>', methods=['POST'])
 @login_required
+@limiter.limit('10 per hour')
 def report_user(user_id):
     user = User.query.get_or_404(user_id)
     if user.id == current_user.id:
@@ -542,13 +590,42 @@ def load_user(user_id):
 @app.route('/')
 def index():
     if current_user.is_authenticated:
-        posts = Post.query.order_by(Post.timestamp.desc()).all()
-        active_story_rows = Story.query.filter(Story.expires_at > datetime.utcnow()).order_by(Story.created_at.desc()).all()
-        suggest_users = User.query.filter(User.id != current_user.id).limit(6).all()
-        return render_template('index.html', posts=posts, stories=active_story_rows, suggest_users=suggest_users)
+        active_feed = request.args.get('feed', 'for-you')
+        if active_feed not in {'for-you', 'following', 'recent'}:
+            active_feed = 'for-you'
+        posts_query = Post.query.order_by(Post.timestamp.desc())
+        if active_feed == 'following':
+            followed_ids = [friend.id for friend in current_user.friends.all()]
+            posts_query = posts_query.filter(Post.user_id.in_(followed_ids + [current_user.id]))
+        posts = posts_query.all()
+        active_story_rows = Story.query.filter(
+            Story.expires_at > datetime.utcnow()
+        ).order_by(Story.created_at.desc()).all()
+
+        # Recommendations must be genuine accounts and must not include the
+        # current user, existing friends, or either side of a block.
+        friend_ids = [friend.id for friend in current_user.friends.all()]
+        blocked_ids = [
+            row.blocked_user_id
+            for row in BlockedUser.query.filter_by(user_id=current_user.id).all()
+        ]
+        blocked_by_ids = [
+            row.user_id
+            for row in BlockedUser.query.filter_by(blocked_user_id=current_user.id).all()
+        ]
+        excluded_ids = set(friend_ids + blocked_ids + blocked_by_ids + [current_user.id])
+        suggestions_query = User.query
+        if excluded_ids:
+            suggestions_query = suggestions_query.filter(~User.id.in_(excluded_ids))
+        suggest_users = suggestions_query.order_by(User.id.desc()).limit(6).all()
+        posts = [post for post in posts if post.user_id not in blocked_ids and post.user_id not in blocked_by_ids]
+        active_story_rows = [story for story in active_story_rows if story.user_id not in blocked_ids and story.user_id not in blocked_by_ids]
+
+        return render_template('index.html', posts=posts, stories=active_story_rows, suggest_users=suggest_users, active_feed=active_feed)
     return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
+@limiter.limit('5 per hour', methods=['POST'])
 def register():
     if request.method == 'POST':
         username = validate_username(request.form.get('username', ''))
@@ -585,6 +662,7 @@ def register():
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'])
 def login():
     if request.method == 'POST':
         username = validate_username(request.form.get('username', ''))
@@ -597,7 +675,7 @@ def login():
         flash('Invalid username or password', 'error')
     return render_template('login.html')
 
-@app.route('/logout')
+@app.route('/logout', methods=['POST'])
 @login_required
 def logout():
     current_user.set_online_status(False)
@@ -625,11 +703,19 @@ def get_link_preview(url):
         }
     
     try:
-        # Add headers to mimic a browser request
+        parsed = urlsplit(url)
+        if parsed.scheme not in {'http', 'https'} or not parsed.hostname:
+            return {'title': '', 'description': '', 'image': ''}
+        resolved = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == 'https' else 80), type=socket.SOCK_STREAM)
+        if not resolved or any(not ipaddress.ip_address(item[4][0]).is_global for item in resolved):
+            return {'title': '', 'description': '', 'image': ''}
+        # Never follow redirects: a public preview URL must not redirect to a private host.
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=headers, timeout=5, allow_redirects=False)
+        if response.status_code != 200:
+            return {'title': '', 'description': '', 'image': ''}
         soup = BeautifulSoup(response.text, 'html.parser')
 
         # Get title
@@ -660,10 +746,30 @@ def get_link_preview(url):
             'image': ''
         }
 
+def has_valid_media_signature(file, file_type):
+    """Reject files whose bytes do not match their claimed image/video extension."""
+    try:
+        position = file.stream.tell()
+        header = file.stream.read(16)
+        file.stream.seek(position)
+    except (AttributeError, OSError):
+        return False
+    if file_type == 'image':
+        return (
+            header.startswith(b'\x89PNG\r\n\x1a\n') or
+            header.startswith(b'\xff\xd8\xff') or
+            header.startswith((b'GIF87a', b'GIF89a')) or
+            (header.startswith(b'RIFF') and header[8:12] == b'WEBP')
+        )
+    if file_type == 'video':
+        return (len(header) >= 12 and header[4:8] == b'ftyp') or header.startswith(b'\x1a\x45\xdf\xa3')
+    return False
+
+
 def save_media(file, file_type='image'):
     if not file or not file.filename:
         return None
-    if not allowed_file(file.filename, file_type):
+    if not allowed_file(file.filename, file_type) or not has_valid_media_signature(file, file_type):
         return None
     if file.content_length and file.content_length > app.config['MAX_CONTENT_LENGTH']:
         return None
@@ -686,21 +792,26 @@ def get_file_type(filename):
 
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
+    if filename in {'default-avatar.svg', 'default-cover.svg'}:
+        return send_from_directory(os.path.join(app.root_path, 'static', 'images'), filename)
     # Split the path into media type and actual filename
     if '/' in filename:
         media_type, actual_filename = filename.split('/', 1)
+        if media_type not in {'image', 'video'}:
+            return jsonify({'error': 'Not found'}), 404
         return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], media_type), actual_filename)
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/create_post', methods=['POST'])
 @login_required
+@limiter.limit('30 per hour')
 def create_post():
     content = request.form.get('content', '')
     media = request.files.get('media')
     feeling = request.form.get('feeling', '')
 
-    content = content.strip() if content else None
-    feeling = feeling.strip() if feeling else None
+    content = sanitize_text(content)[:10000] if content else None
+    feeling = sanitize_text(feeling)[:50] if feeling else None
 
     media_type = None
     media_filename = None
@@ -742,8 +853,9 @@ def create_post():
 
 @app.route('/create_story', methods=['POST'])
 @login_required
+@limiter.limit('10 per hour')
 def create_story():
-    caption = sanitize_text(request.form.get('caption', ''))
+    caption = sanitize_text(request.form.get('caption', ''))[:2000]
     media = request.files.get('story_media')
     if not media or not media.filename:
         flash('Add a photo or video to publish a story.', 'error')
@@ -776,6 +888,8 @@ def create_story():
 @login_required
 def view_story(story_id):
     story = Story.query.get_or_404(story_id)
+    if story.user_id != current_user.id and (current_user.has_blocked(story.user) or current_user.is_blocked_by(story.user)):
+        return jsonify({'status': 'error', 'message': 'This story is unavailable.'}), 403
     if story.is_expired:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({'status': 'expired'}), 410
@@ -792,6 +906,8 @@ def view_story(story_id):
         'caption': story.caption or '',
         'media_url': url_for('uploaded_file', filename=story.media_file) if story.media_file else '',
         'username': story.user.username,
+        'media_type': story.media_type,
+        'avatar_url': url_for('uploaded_file', filename=story.user.get_profile_picture),
         'views': StoryView.query.filter_by(story_id=story.id).count(),
     })
 
@@ -799,6 +915,10 @@ def view_story(story_id):
 @login_required
 def react_to_story(story_id):
     story = Story.query.get_or_404(story_id)
+    if story.user_id != current_user.id and (current_user.has_blocked(story.user) or current_user.is_blocked_by(story.user)):
+        return jsonify({'status': 'error', 'message': 'This story is unavailable.'}), 403
+    if story.is_expired:
+        return jsonify({'status': 'error', 'message': 'This story has expired.'}), 410
     reaction_type = (request.form.get('reaction_type') or 'like').strip().lower()
     if reaction_type not in {'like', 'love', 'wow', 'fire'}:
         reaction_type = 'like'
@@ -814,11 +934,17 @@ def react_to_story(story_id):
 @login_required
 def reply_to_story(story_id):
     story = Story.query.get_or_404(story_id)
-    content = sanitize_text(request.form.get('content', ''))
+    if story.user_id != current_user.id and (current_user.has_blocked(story.user) or current_user.is_blocked_by(story.user)):
+        return jsonify({'status': 'error', 'message': 'This story is unavailable.'}), 403
+    if story.is_expired:
+        return jsonify({'status': 'error', 'message': 'This story has expired.'}), 410
+    content = sanitize_text(request.form.get('content', ''))[:2000]
     if not content:
         return jsonify({'status': 'error', 'message': 'Reply cannot be empty'}), 400
     reply = StoryReply(story_id=story.id, user_id=current_user.id, content=content)
     db.session.add(reply)
+    if story.user_id != current_user.id:
+        db.session.add(Notification(user_id=story.user_id, content=f'{current_user.username} replied to your story.', notification_type='story_reply'))
     db.session.commit()
     return jsonify({'status': 'ok', 'username': current_user.username, 'content': content})
 
@@ -826,6 +952,8 @@ def reply_to_story(story_id):
 @login_required
 def like_post(post_id):
     post = Post.query.get_or_404(post_id)
+    if current_user.has_blocked(post.author) or current_user.is_blocked_by(post.author):
+        return jsonify({'status': 'error', 'message': 'This post is unavailable.'}), 403
     reaction_type = (request.form.get('reaction_type') or 'like').strip().lower()
     if reaction_type not in {'like', 'love', 'wow', 'fire'}:
         reaction_type = 'like'
@@ -842,6 +970,8 @@ def like_post(post_id):
         db.session.add(Like(user_id=current_user.id, post_id=post_id, reaction_type=reaction_type))
         liked = True
 
+    if liked and post.author.id != current_user.id:
+        db.session.add(Notification(user_id=post.author.id, content=f'{current_user.username} reacted to your post.', notification_type='like'))
     db.session.commit()
     count = Like.query.filter_by(post_id=post_id).count()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -850,6 +980,7 @@ def like_post(post_id):
 
 @app.route('/comment/<int:post_id>', methods=['POST'])
 @login_required
+@limiter.limit('60 per hour')
 def add_comment(post_id):
     content = sanitize_text(request.form.get('content', ''))
     if not content:
@@ -858,9 +989,37 @@ def add_comment(post_id):
         flash('Comment cannot be empty', 'error')
         return redirect(request.referrer or url_for('index'))
 
-    parent_id = request.form.get('parent_id')
-    comment = Comment(content=content, user_id=current_user.id, post_id=post_id, parent_id=int(parent_id) if parent_id and parent_id.isdigit() else None)
+    post = Post.query.get_or_404(post_id)
+    if current_user.has_blocked(post.author) or current_user.is_blocked_by(post.author):
+        return jsonify({'status': 'error', 'message': 'This post is unavailable.'}), 403
+    parent_id_raw = request.form.get('parent_id', '').strip()
+    parent = None
+    if parent_id_raw:
+        if not parent_id_raw.isdigit():
+            return jsonify({'status': 'error', 'message': 'Invalid reply target'}), 400
+        parent = Comment.query.filter_by(id=int(parent_id_raw), post_id=post.id).first()
+        if parent is None or parent.parent_id is not None:
+            return jsonify({'status': 'error', 'message': 'The comment you are replying to does not exist'}), 404
+
+    comment = Comment(
+        content=content[:5000],
+        user_id=current_user.id,
+        post_id=post.id,
+        parent_id=parent.id if parent else None
+    )
     db.session.add(comment)
+
+    # Persist an actual notification for the post owner or parent-comment author.
+    notification_target = parent.author if parent else post.author
+    if notification_target.id != current_user.id:
+        db.session.add(Notification(
+            user_id=notification_target.id,
+            content=(
+                f'{current_user.username} replied to your comment.'
+                if parent else f'{current_user.username} commented on your post.'
+            ),
+            notification_type='comment_reply' if parent else 'comment'
+        ))
     db.session.commit()
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -895,6 +1054,8 @@ def save_post(post_id):
 @login_required
 def share_post(post_id):
     post = Post.query.get_or_404(post_id)
+    if current_user.has_blocked(post.author) or current_user.is_blocked_by(post.author):
+        return jsonify({'status': 'error', 'message': 'This post is unavailable.'}), 403
     share_text = f"Shared from {post.author.username}: {post.content or 'Check this post on HDM'}"
     shared = Post(
         content=share_text,
@@ -909,7 +1070,8 @@ def share_post(post_id):
         timestamp=datetime.utcnow()
     )
     db.session.add(shared)
-    db.session.add(Notification(user_id=post.author.id, content=f'{current_user.username} shared your post.', notification_type='share'))
+    if post.author.id != current_user.id:
+        db.session.add(Notification(user_id=post.author.id, content=f'{current_user.username} shared your post.', notification_type='share'))
     db.session.commit()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({'status': 'ok', 'post_id': shared.id})
@@ -935,11 +1097,15 @@ def delete_post(post_id):
     Like.query.filter_by(post_id=post.id).delete()
     Comment.query.filter_by(post_id=post.id).delete()
     
-    # Delete media file if exists
+    # Shared posts may still reference this media file; only remove an unreferenced asset.
     if post.media_file:
-        media_path = os.path.join(app.config['UPLOAD_FOLDER'], post.media_type, os.path.basename(post.media_file))
-        if os.path.exists(media_path):
-            os.remove(media_path)
+        other_posts = Post.query.filter(Post.media_file == post.media_file, Post.id != post.id).count()
+        other_stories = Story.query.filter_by(media_file=post.media_file).count()
+        other_messages = Message.query.filter_by(media_file=post.media_file).count()
+        if not (other_posts or other_stories or other_messages):
+            media_path = os.path.join(app.config['UPLOAD_FOLDER'], post.media_type or '', os.path.basename(post.media_file))
+            if os.path.exists(media_path):
+                os.remove(media_path)
     
     db.session.delete(post)
     db.session.commit()
@@ -954,6 +1120,7 @@ def delete_comment(comment_id):
         flash('You cannot delete someone else\'s comment!', 'error')
         return redirect(url_for('index'))
     
+    Comment.query.filter_by(parent_id=comment.id).delete(synchronize_session=False)
     db.session.delete(comment)
     db.session.commit()
     flash('Comment deleted successfully!', 'success')
@@ -963,6 +1130,8 @@ def delete_comment(comment_id):
 @login_required
 def profile(username):
     user = User.query.filter_by(username=username).first_or_404()
+    if user.has_blocked(current_user):
+        return render_template('index.html', posts=[], stories=[], suggest_users=[], active_feed='for-you'), 404
     posts = Post.query.filter_by(user_id=user.id).order_by(Post.timestamp.desc()).all()
     is_friend = current_user.is_friend(user)
     has_sent_request = current_user.has_sent_friend_request(user)
@@ -1048,11 +1217,17 @@ def friends_list(username):
 def search():
     query = request.args.get('q', '')
     if query:
-        users = User.query.filter(
+        blocked_ids = [row.blocked_user_id for row in BlockedUser.query.filter_by(user_id=current_user.id).all()]
+        blocked_by_ids = [row.user_id for row in BlockedUser.query.filter_by(blocked_user_id=current_user.id).all()]
+        excluded_ids = blocked_ids + blocked_by_ids
+        users_query = User.query.filter(
             (User.username.ilike(f'%{query}%')) |
             (User.email.ilike(f'%{query}%')) |
             (User.bio.ilike(f'%{query}%'))
-        ).all()
+        )
+        if excluded_ids:
+            users_query = users_query.filter(~User.id.in_(excluded_ids))
+        users = users_query.all()
     else:
         users = []
     return render_template('search.html', users=users, query=query)
@@ -1062,8 +1237,16 @@ def search():
 def messages():
     messages_received = Message.query.filter_by(recipient_id=current_user.id).order_by(Message.timestamp.desc()).all()
     messages_sent = Message.query.filter_by(sender_id=current_user.id).order_by(Message.timestamp.desc()).all()
-    return render_template('messages.html', 
-                         messages_received=messages_received, 
+    selected_id = request.args.get('user', type=int)
+    if selected_id:
+        selected_user = User.query.get_or_404(selected_id)
+        if selected_user.id == current_user.id or current_user.has_blocked(selected_user) or current_user.is_blocked_by(selected_user):
+            flash('This conversation is unavailable.', 'error')
+            return redirect(url_for('messages'))
+        Message.query.filter_by(sender_id=selected_user.id, recipient_id=current_user.id, is_read=False).update({'is_read': True}, synchronize_session='fetch')
+        db.session.commit()
+    return render_template('messages.html',
+                         messages_received=messages_received,
                          messages_sent=messages_sent,
                          user_query=User.query)
 
@@ -1100,18 +1283,34 @@ def delete_notification(notification_id):
 
 @app.route('/send_message/<int:recipient_id>', methods=['POST'])
 @login_required
+@limiter.limit('120 per hour')
 def send_message(recipient_id):
-    content = request.form['content']
+    recipient = User.query.get_or_404(recipient_id)
+    if recipient.id == current_user.id or current_user.has_blocked(recipient) or current_user.is_blocked_by(recipient):
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'status': 'error', 'message': 'Messaging is unavailable for this account.'}), 403
+        flash('Messaging is unavailable for this account.', 'error')
+        return redirect(url_for('messages', user=recipient_id))
+    content = sanitize_text(request.form.get('content', ''))[:5000]
     media = request.files.get('media')
     
-    if content or media:
+    if content or (media and media.filename):
         media_type = None
         media_filename = None
         
-        if media:
+        if media and media.filename:
             media_type = get_file_type(media.filename)
-            if media_type:
-                media_filename = save_media(media, media_type)
+            if not media_type:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify({'status': 'error', 'message': 'Unsupported attachment type.'}), 400
+                flash('Unsupported attachment type.', 'error')
+                return redirect(url_for('messages', user=recipient_id))
+            media_filename = save_media(media, media_type)
+            if not media_filename:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify({'status': 'error', 'message': 'Attachment upload failed.'}), 400
+                flash('Attachment upload failed.', 'error')
+                return redirect(url_for('messages', user=recipient_id))
         
         message = Message(
             sender_id=current_user.id,
@@ -1152,7 +1351,7 @@ def send_message(recipient_id):
             })
         else:
             flash('Message sent successfully!', 'success')
-            return redirect(url_for('messages'))
+            return redirect(url_for('messages', user=recipient_id))
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
@@ -1161,7 +1360,7 @@ def send_message(recipient_id):
         })
     else:
         flash('Message content required', 'error')
-        return redirect(url_for('messages'))
+        return redirect(url_for('messages', user=recipient_id))
 
 @app.route('/friend_requests')
 @login_required
@@ -1172,11 +1371,12 @@ def friend_requests():
 
 @app.route('/send_friend_request/<int:user_id>', methods=['POST'])
 @login_required
+@limiter.limit('30 per hour')
 def send_friend_request(user_id):
     user = User.query.get_or_404(user_id)
-    if user.id == current_user.id:
+    if user.id == current_user.id or current_user.has_blocked(user) or current_user.is_blocked_by(user):
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return jsonify({'status': 'error', 'message': 'You cannot send a friend request to yourself.'}), 400
+            return jsonify({'status': 'error', 'message': 'You cannot send a request to this account.'}), 400
         flash('You cannot send a friend request to yourself.', 'error')
         return redirect(url_for('profile', username=user.username))
 
@@ -1218,10 +1418,25 @@ def decline_friend_request(request_id):
 
 # Database initialization
 def init_database():
+    """Create missing tables without destroying existing user data.
+
+    Schema changes must be delivered through Flask-Migrate migrations.
+    This helper intentionally never drops or recreates existing tables.
+    """
     with app.app_context():
-        db.drop_all()  # Drop all existing tables
-        db.create_all()  # Create all tables
-        print('Database initialized!')
+        db.create_all()
+        print('Database schema checked; existing data preserved.')
+
+@app.route('/healthz')
+def healthz():
+    """Lightweight platform health check; does not expose application data."""
+    try:
+        db.session.execute(db.text('SELECT 1'))
+        return jsonify({'status': 'ok', 'database': 'ok'}), 200
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('Health check database probe failed')
+        return jsonify({'status': 'error'}), 503
 
 @app.route('/notifications/unread')
 @login_required
@@ -1248,7 +1463,13 @@ def handle_disconnect():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    socketio.run(app, debug=os.environ.get('FLASK_DEBUG') == '1')
+    socketio.run(
+        app,
+        host='0.0.0.0',
+        port=int(os.environ.get('PORT', '5000')),
+        debug=os.environ.get('FLASK_DEBUG') == '1',
+        allow_unsafe_werkzeug=os.environ.get('FLASK_DEBUG') == '1'
+    )
 
 
 

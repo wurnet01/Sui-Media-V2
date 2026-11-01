@@ -13,7 +13,7 @@
                 <div class="profile-stats">
                     <div><strong>{{ current_user.posts|length }}</strong><span>Posts</span></div>
                     <div><strong>{{ current_user.friends.count() }}</strong><span>Friends</span></div>
-                    <div><strong>94%</strong><span>Profile</span></div>
+                    <div><strong>{{ current_user.stories|length }}</strong><span>Stories</span></div>
                 </div>
             </div>
         </div>
@@ -32,9 +32,7 @@
         <div class="panel-card small-panel">
             <div class="section-head"><h4>Saved</h4></div>
             <div class="mini-list">
-                <span><i class="bi bi-bookmark"></i> Creative ideas</span>
-                <span><i class="bi bi-bookmark"></i> Travel inspiration</span>
-                <span><i class="bi bi-bookmark"></i> Product inspiration</span>
+                <a href="{{ url_for('saved_posts') }}"><i class="bi bi-bookmark"></i> View saved posts</a>
             </div>
         </div>
     </aside>
@@ -64,15 +62,14 @@
         </div>
 
         <div class="panel-card composer-card">
-            <form method="POST" action="{{ url_for('create_post') }}" enctype="multipart/form-data">
+            <form method="POST" action="{{ url_for('create_post') }}" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="composer-top">
                     <img src="{{ url_for('uploaded_file', filename=current_user.get_profile_picture) }}" class="profile-picture-small" alt="{{ current_user.username }} avatar">
                     <input type="text" class="form-control composer-input" name="content" placeholder="Share an update with your HDM network..." aria-label="Post content">
                 </div>
                 <div class="composer-toolbar">
                     <label class="composer-action" for="media"><i class="bi bi-image-fill"></i><span>Photo</span><input type="file" class="d-none" id="media" name="media" accept="image/*,video/*"></label>
-                    <button type="button" class="composer-action" data-bs-toggle="modal" data-bs-target="#feelingModal"><i class="bi bi-emoji-smile"></i><span>Feeling</span></button>
-                    <button type="button" class="composer-action"><i class="bi bi-geo-alt-fill"></i><span>Location</span></button>
+                    <button type="button" class="composer-action" data-bs-toggle="modal" data-bs-target="#feelingModal"><i class="bi bi-emoji-smile"></i><span id="feelingLabel">Feeling</span></button>
                     <button type="submit" class="btn btn-primary publish-btn">Post</button>
                 </div>
                 <input type="hidden" name="feeling" id="selectedFeeling" value="">
@@ -81,9 +78,9 @@
 
         <div class="feed-filter-bar panel-card">
             <div class="filter-group">
-                <button class="filter-pill active" type="button">For you</button>
-                <button class="filter-pill" type="button">Following</button>
-                <button class="filter-pill" type="button">Recent</button>
+                <a class="filter-pill {{ 'active' if active_feed == 'for-you' else '' }}" href="{{ url_for('index', feed='for-you') }}">For you</a>
+                <a class="filter-pill {{ 'active' if active_feed == 'following' else '' }}" href="{{ url_for('index', feed='following') }}">Following</a>
+                <a class="filter-pill {{ 'active' if active_feed == 'recent' else '' }}" href="{{ url_for('index', feed='recent') }}">Recent</a>
             </div>
         </div>
 
@@ -112,7 +109,7 @@
                             <button class="btn btn-link muted-dot" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-three-dots"></i></button>
                             <ul class="dropdown-menu dropdown-menu-end menu-card">
                                 <li>
-                                    <form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST">
+                                    <form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete post</button>
                                     </form>
                                 </li>
@@ -136,20 +133,20 @@
                 </div>
 
                 <div class="post-actions">
-                    <form method="POST" action="{{ url_for('like_post', post_id=post.id) }}" class="post-action-form" data-ajax-form="true">
+                    <form method="POST" action="{{ url_for('like_post', post_id=post.id) }}" class="post-action-form" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="action-btn small {% if has_liked %}active{% endif %}" data-like-button="{{ post.id }}"><i class="bi bi-heart-fill"></i> Like</button>
                     </form>
                     <button type="button" class="action-btn small comment-toggle"><i class="bi bi-chat-left-text"></i> Comment</button>
-                    <form method="POST" action="{{ url_for('share_post', post_id=post.id) }}" class="post-action-form" data-ajax-form="true">
+                    <form method="POST" action="{{ url_for('share_post', post_id=post.id) }}" class="post-action-form" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="action-btn small share-button"><i class="bi bi-share-fill"></i> Share</button>
                     </form>
-                    <form method="POST" action="{{ url_for('save_post', post_id=post.id) }}" class="post-action-form" data-ajax-form="true">
+                    <form method="POST" action="{{ url_for('save_post', post_id=post.id) }}" class="post-action-form" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="action-btn small"><i class="bi bi-bookmark"></i> Save</button>
                     </form>
                 </div>
 
                 <div class="comment-section">
-                    <form method="POST" action="{{ url_for('add_comment', post_id=post.id) }}" class="comment-form" data-ajax-form="true">
+                    <form method="POST" action="{{ url_for('add_comment', post_id=post.id) }}" class="comment-form" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="text" class="form-control" name="content" placeholder="Write a response..." required>
                         <button type="submit" class="btn btn-primary">Send</button>
                     </form>
@@ -165,14 +162,14 @@
                                     </div>
                                     <p>{{ comment.content }}</p>
                                     <button type="button" class="reply-link">Reply</button>
-                                    <form class="reply-form" method="POST" action="{{ url_for('add_comment', post_id=post.id) }}" data-ajax-form="true">
+                                    <form class="reply-form" method="POST" action="{{ url_for('add_comment', post_id=post.id) }}" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <input type="hidden" name="parent_id" value="{{ comment.id }}">
                                         <input type="text" name="content" class="form-control" placeholder="Reply to {{ comment.author.username }}..." required>
                                         <button type="submit" class="btn btn-sm btn-primary">Reply</button>
                                     </form>
                                 </div>
                                 {% if comment.author == current_user %}
-                                    <form action="{{ url_for('delete_comment', comment_id=comment.id) }}" method="POST" class="comment-delete">
+                                    <form action="{{ url_for('delete_comment', comment_id=comment.id) }}" method="POST" class="comment-delete"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-link text-danger p-0"><i class="bi bi-trash"></i></button>
                                     </form>
                                 {% endif %}
@@ -189,7 +186,7 @@
                                         <p>{{ reply.content }}</p>
                                     </div>
                                     {% if reply.author == current_user %}
-                                        <form action="{{ url_for('delete_comment', comment_id=reply.id) }}" method="POST" class="comment-delete">
+                                        <form action="{{ url_for('delete_comment', comment_id=reply.id) }}" method="POST" class="comment-delete"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit" class="btn btn-link text-danger p-0"><i class="bi bi-trash"></i></button>
                                         </form>
                                     {% endif %}
@@ -213,7 +210,7 @@
                             <strong><a href="{{ url_for('profile', username=user.username) }}">{{ user.username }}</a></strong>
                             <span>{{ user.bio or 'New HDM member' }}</span>
                         </div>
-                        <form method="POST" action="{{ url_for('send_friend_request', user_id=user.id) }}" data-ajax-form="true" class="friend-request-form">
+                        <form method="POST" action="{{ url_for('send_friend_request', user_id=user.id) }}" data-ajax-form="true" class="friend-request-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="mini-action">Connect</button>
                         </form>
                     </div>
@@ -221,15 +218,40 @@
             </div>
         </div>
         <div class="panel-card side-panel">
-            <div class="section-head"><h4>Trending</h4></div>
+            <div class="section-head"><h4>Explore topics</h4></div>
             <div class="trend-list">
-                <div><span>#Design</span><small>18.4k posts</small></div>
-                <div><span>#LaunchWeek</span><small>9.2k posts</small></div>
-                <div><span>#RemoteWork</span><small>6.7k posts</small></div>
-                <div><span>#CreatorEconomy</span><small>4.1k posts</small></div>
+                <div><span>#Design</span><small>Discover creative ideas</small></div>
+                <div><span>#Technology</span><small>Talk about what is new</small></div>
+                <div><span>#Learning</span><small>Share what you are learning</small></div>
+                <div><span>#Community</span><small>Meet people with shared interests</small></div>
             </div>
         </div>
     </aside>
+</div>
+
+
+<div class="modal fade" id="feelingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content panel-card modal-panel">
+            <div class="modal-header">
+                <h5 class="modal-title">How are you feeling?</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="feeling-grid">
+                    <button type="button" class="feeling-btn" data-feeling="😊 Feeling happy">😊 Happy</button>
+                    <button type="button" class="feeling-btn" data-feeling="😎 Feeling cool">😎 Cool</button>
+                    <button type="button" class="feeling-btn" data-feeling="❤️ Feeling loved">❤️ Loved</button>
+                    <button type="button" class="feeling-btn" data-feeling="🎉 Celebrating">🎉 Celebrating</button>
+                    <button type="button" class="feeling-btn" data-feeling="🤔 Thinking">🤔 Thinking</button>
+                    <button type="button" class="feeling-btn" data-feeling="🙏 Grateful">🙏 Grateful</button>
+                    <button type="button" class="feeling-btn" data-feeling="💪 Motivated">💪 Motivated</button>
+                    <button type="button" class="feeling-btn" data-feeling="😴 Tired">😴 Tired</button>
+                </div>
+                <button type="button" class="ghost-button mt-3" data-clear-feeling>Clear feeling</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="storyComposerModal" tabindex="-1" aria-hidden="true">
@@ -239,7 +261,7 @@
                 <h5 class="modal-title">Create a story</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" action="{{ url_for('create_story') }}" enctype="multipart/form-data">
+            <form method="POST" action="{{ url_for('create_story') }}" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <textarea class="form-control story-caption" name="caption" rows="3" placeholder="What are you sharing today?"></textarea>
                     <label class="upload-story mt-3" for="storyMedia">
@@ -273,148 +295,20 @@
             <div class="story-viewer-body">
                 <img id="storyViewerMedia" src="" alt="Story media">
                 <p id="storyViewerCaption"></p>
+                <div class="story-reactions d-flex gap-2 flex-wrap mt-3">
+                    <button type="button" class="mini-action" data-story-reaction="like">Like</button>
+                    <button type="button" class="mini-action" data-story-reaction="love">Love</button>
+                    <button type="button" class="mini-action" data-story-reaction="wow">Wow</button>
+                    <button type="button" class="mini-action" data-story-reaction="fire">Fire</button>
+                </div>
+                <form id="storyReplyForm" method="POST" action="" data-ajax-form="true" class="mt-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="d-flex gap-2"><input class="form-control" type="text" name="content" maxlength="2000" placeholder="Reply to this story…" required><button class="btn btn-primary" type="submit">Send</button></div>
+                </form>
             </div>
         </div>
     </div>
 </div>
 
-<script>
-    document.addEventListener('submit', async function (event) {
-        const form = event.target;
-        if (!form.matches('[data-ajax-form="true"]')) return;
-        if (form.classList.contains('reply-form')) {
-            event.preventDefault();
-        } else if (form.querySelector('button[type="submit"].action-btn')) {
-            event.preventDefault();
-        } else if (!form.classList.contains('comment-form') && !form.querySelector('input[name="content"]')) {
-            return;
-        }
 
-        const submitter = event.submitter || form.querySelector('button[type="submit"]');
-        if (submitter && submitter.tagName === 'BUTTON' && submitter.classList.contains('action-btn')) {
-            event.preventDefault();
-        }
-
-        if (form.classList.contains('comment-form') || form.classList.contains('reply-form')) {
-            event.preventDefault();
-        }
-
-        const isLike = form.action.includes('/like/') || form.querySelector('[data-like-button]');
-        const isSave = form.action.includes('/save_post/');
-        const isComment = form.action.includes('/comment/');
-        const isShare = form.action.includes('/share/');
-        const isFriendRequest = form.action.includes('/send_friend_request/') || form.action.includes('/accept_friend_request/') || form.action.includes('/decline_friend_request/');
-
-        try {
-            const response = await fetch(form.action, {
-                method: 'POST',
-                body: new FormData(form),
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                credentials: 'same-origin'
-            });
-
-            const contentType = response.headers.get('content-type') || '';
-            if (!contentType.includes('application/json')) {
-                form.submit();
-                return;
-            }
-
-            const data = await response.json();
-            if (isLike && data.status === 'ok') {
-                const countEl = document.querySelector('[data-like-count="' + form.action.match(/(\\d+)$/)[1] + '"]');
-                const button = form.querySelector('[data-like-button]');
-                if (countEl) countEl.textContent = data.count + ' likes';
-                if (button) {
-                    button.classList.toggle('active', data.liked);
-                }
-                return;
-            }
-
-            if (isComment && data.status === 'ok') {
-                if (data.parent_id) {
-                    const parentComment = form.closest('.comment-item');
-                    if (parentComment) {
-                        const replyBox = document.createElement('div');
-                        replyBox.className = 'comment-item reply-comment';
-                        replyBox.innerHTML = '<img src="/uploads/' + data.avatar + '" class="profile-picture-small" alt="' + data.username + '"><div class="comment-body"><div class="comment-topline"><strong>' + data.username + '</strong> <small>' + data.timestamp + '</small></div><p>' + data.content + '</p></div>';
-                        parentComment.insertAdjacentElement('afterend', replyBox);
-                    }
-                } else {
-                    const thread = form.closest('.comment-thread');
-                    if (thread) {
-                        const item = document.createElement('div');
-                        item.className = 'comment-item';
-                        item.innerHTML = '<img src="/uploads/' + data.avatar + '" class="profile-picture-small" alt="' + data.username + '"><div class="comment-body"><div class="comment-topline"><strong>' + data.username + '</strong> <small>' + data.timestamp + '</small></div><p>' + data.content + '</p></div>';
-                        thread.prepend(item);
-                    }
-                }
-                form.reset();
-                return;
-            }
-
-            if (isSave && data.status === 'ok') {
-                form.querySelector('button').classList.toggle('active');
-                return;
-            }
-
-            if (isShare && data.status === 'ok') {
-                const button = form.querySelector('button');
-                if (button) {
-                    button.classList.add('active');
-                    button.disabled = true;
-                    button.innerHTML = '<i class="bi bi-check-circle-fill"></i> Shared';
-                }
-                return;
-            }
-
-            if (isFriendRequest && data.status === 'ok') {
-                const button = form.querySelector('button');
-                if (button) {
-                    button.disabled = true;
-                    button.textContent = data.message || 'Done';
-                }
-                if (form.closest('.request-item')) {
-                    form.closest('.request-item').remove();
-                }
-                return;
-            }
-
-            if (data.redirect) {
-                window.location.href = data.redirect;
-            }
-        } catch (error) {
-            form.submit();
-        }
-    });
-
-    document.querySelectorAll('.comment-toggle').forEach(function (button) {
-        button.addEventListener('click', function () {
-            const section = button.closest('.post-card').querySelector('.comment-section');
-            if (section) {
-                section.classList.toggle('open');
-            }
-        });
-    });
-
-    document.querySelectorAll('.reply-link').forEach(function (button) {
-        button.addEventListener('click', function () {
-            const form = button.parentElement.querySelector('.reply-form');
-            if (form) form.classList.toggle('open');
-        });
-    });
-
-    document.querySelectorAll('.story-entry').forEach(function (button) {
-        button.addEventListener('click', function () {
-            const modal = document.getElementById('storyViewerModal');
-            const media = modal.querySelector('#storyViewerMedia');
-            const caption = modal.querySelector('#storyViewerCaption');
-            const user = modal.querySelector('#storyViewerUser');
-            const avatar = modal.querySelector('#storyViewerAvatar');
-            avatar.src = button.dataset.storyAvatar;
-            user.textContent = button.dataset.storyUser;
-            media.src = button.dataset.storyMedia;
-            caption.textContent = button.dataset.storyCaption || 'A new moment from the HDM community.';
-        });
-    });
-</script>
 {% endblock %}

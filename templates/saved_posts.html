@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="list-page-shell">
+    <header class="page-header-card panel-card">
+        <div>
+            <p class="eyebrow">Your collection</p>
+            <h1>Saved posts</h1>
+            <p class="muted-copy mb-0">Posts you chose to keep close.</p>
+        </div>
+        <a class="ghost-button" href="{{ url_for('index') }}"><i class="bi bi-arrow-left"></i> Back to feed</a>
+    </header>
+
+    {% if posts %}
+        <div class="center-column">
+            {% for post in posts %}
+                <article class="post-card panel-card">
+                    <div class="post-header">
+                        <div class="post-author">
+                            <img src="{{ url_for('uploaded_file', filename=post.author.get_profile_picture) }}" class="profile-picture-small" alt="{{ post.author.username }}">
+                            <div>
+                                <h4><a href="{{ url_for('profile', username=post.author.username) }}">{{ post.author.username }}</a></h4>
+                                <div class="meta-row"><span>{{ post.timestamp.strftime('%b %d, %Y · %H:%M') }}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% if post.content %}<p class="post-copy">{{ post.content }}</p>{% endif %}
+                    {% if post.media_file %}
+                        {% if post.media_type == 'image' %}
+                            <div class="post-media media-image"><img src="{{ url_for('uploaded_file', filename=post.media_file) }}" alt="Saved post media"></div>
+                        {% elif post.media_type == 'video' %}
+                            <div class="post-media media-video"><video controls><source src="{{ url_for('uploaded_file', filename=post.media_file) }}"></video></div>
+                        {% endif %}
+                    {% endif %}
+                    <div class="post-actions">
+                        <form method="POST" action="{{ url_for('like_post', post_id=post.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="action-btn small"><i class="bi bi-heart"></i> Like · {{ post.likes|length }}</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('save_post', post_id=post.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="action-btn small active"><i class="bi bi-bookmark-check"></i> Remove from saved</button>
+                        </form>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state-panel full-size panel-card">
+            <i class="bi bi-bookmark"></i>
+            <h4>No saved posts yet</h4>
+            <p>Use the Save action on a post and it will be collected here.</p>
+            <a class="action-chip action-chip--solid mt-3" href="{{ url_for('index') }}">Explore the feed</a>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}
