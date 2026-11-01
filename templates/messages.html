@@ -68,7 +68,7 @@
                     {% endfor %}
                 </div>
                 <div class="chat-composer">
-                    <form method="POST" action="{{ url_for('send_message', recipient_id=other_user.id) }}" enctype="multipart/form-data">
+                    <form method="POST" action="{{ url_for('send_message', recipient_id=other_user.id) }}" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="composer-input-row">
                             <input type="text" name="content" placeholder="Write a message..." aria-label="Message content">
                             <label class="mini-upload" for="message-media"><i class="bi bi-paperclip"></i><input type="file" id="message-media" name="media" accept="image/*,video/*"></label>
