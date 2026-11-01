@@ -17,12 +17,13 @@
     status.className = 'form-status ' + kind;
     status.textContent = message;
   };
+  const csrfToken = () => $('meta[name="csrf-token"]')?.content || '';
   const request = async (form) => {
     const response = await fetch(form.action, {
       method: (form.method || 'POST').toUpperCase(),
       body: new FormData(form),
       credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-CSRFToken': csrfToken() }
     });
     const type = response.headers.get('content-type') || '';
     if (!type.includes('application/json')) throw new Error('The session may have expired. Refresh and try again.');
@@ -34,7 +35,7 @@
     const item = create('div', 'comment-item' + (reply ? ' reply-comment' : ''));
     item.dataset.commentId = data.comment_id || '';
     const avatar = create('img', 'profile-picture-small');
-    avatar.src = '/uploads/' + encodeURIComponent(data.avatar || 'default.jpg');
+    avatar.src = '/uploads/' + (data.avatar || 'default.jpg').split('/').map(encodeURIComponent).join('/');
     avatar.alt = data.username || 'Member';
     const body = create('div', 'comment-body');
     const top = create('div', 'comment-topline');
@@ -48,6 +49,7 @@
       replyForm.method = 'post';
       replyForm.action = '/comment/' + (data.post_id || '');
       replyForm.dataset.ajaxForm = 'true';
+      const csrf = document.createElement('input'); csrf.type='hidden'; csrf.name='csrf_token'; csrf.value=csrfToken(); replyForm.append(csrf);
       const parent = document.createElement('input');
       parent.type = 'hidden'; parent.name = 'parent_id'; parent.value = data.comment_id;
       const input = document.createElement('input');
@@ -90,7 +92,7 @@
       try {
         const response = await fetch('/story/' + encodeURIComponent(storyButton.dataset.storyId) + '/view', {
           method: 'POST', credentials: 'same-origin',
-          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-CSRFToken': csrfToken() }
         });
         const data = await response.json();
         if (!response.ok || data.status !== 'ok') throw new Error('This story is no longer available.');
@@ -119,7 +121,7 @@
       const id = $('#storyViewerModal')?.dataset.storyId;
       if (!id) return;
       const form = new FormData(); form.set('reaction_type', reaction.dataset.storyReaction);
-      fetch('/story/' + id + '/react', { method:'POST', body:form, credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'} })
+      fetch('/story/' + id + '/react', { method:'POST', body:form, credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest','X-CSRFToken':csrfToken()} })
         .then(r => { if (!r.ok) throw new Error(); reaction.classList.add('active'); })
         .catch(() => {});
     }
@@ -165,6 +167,9 @@
           thread.prepend(node);
           section?.classList.add('open');
         }
+        form.reset();
+      } else if (action.includes('/story/') && action.includes('/reply')) {
+        showStatus(form, data.message || 'Reply sent.', 'success');
         form.reset();
       } else if (action.includes('/send_friend_request/') || action.includes('/accept_friend_request/') || action.includes('/decline_friend_request/')) {
         if (submit) { submit.textContent = data.message || 'Done'; submit.disabled = true; }
