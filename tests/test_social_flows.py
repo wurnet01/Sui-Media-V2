@@ -70,3 +70,18 @@ def test_post_like_comment_and_story_flow():
         assert story is not None
         assert story.caption == 'Pytest story'
         assert story.media_type == 'image'
+
+
+def test_state_changing_routes_require_csrf_token():
+    app.config['WTF_CSRF_ENABLED'] = True
+    try:
+        response = app.test_client().post('/login', data={'username': 'nobody', 'password': 'wrong'})
+        assert response.status_code == 400
+    finally:
+        app.config['WTF_CSRF_ENABLED'] = False
+
+
+def test_health_endpoint_checks_database():
+    response = app.test_client().get('/healthz')
+    assert response.status_code == 200
+    assert response.get_json() == {'status': 'ok', 'database': 'ok'}
