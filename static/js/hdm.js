@@ -76,6 +76,19 @@
       if (form) { form.classList.toggle('open'); $('input[name="content"]', form)?.focus(); }
       return;
     }
+    const feelingOption = event.target.closest('[data-feeling]');
+    const clearFeeling = event.target.closest('[data-clear-feeling]');
+    if (feelingOption || clearFeeling) {
+      const value = feelingOption?.dataset.feeling || '';
+      const input = $('#selectedFeeling');
+      const label = $('#feelingLabel');
+      if (input) input.value = value;
+      if (label) label.textContent = value || 'Feeling';
+      document.querySelectorAll('[data-feeling]').forEach(option => option.classList.toggle('selected', option === feelingOption));
+      const modal = $('#feelingModal');
+      if (modal && window.bootstrap) window.bootstrap.Modal.getOrCreateInstance(modal).hide();
+      return;
+    }
     const storyButton = event.target.closest('.story-entry');
     if (storyButton) {
       const modal = $('#storyViewerModal');
