@@ -779,6 +779,8 @@ def uploaded_file(filename):
     # Split the path into media type and actual filename
     if '/' in filename:
         media_type, actual_filename = filename.split('/', 1)
+        if media_type not in {'image', 'video'}:
+            return jsonify({'error': 'Not found'}), 404
         return send_from_directory(os.path.join(app.config['UPLOAD_FOLDER'], media_type), actual_filename)
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
