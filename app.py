@@ -647,7 +647,7 @@ def login():
         flash('Invalid username or password', 'error')
     return render_template('login.html')
 
-@app.route('/logout')
+@app.route('/logout', methods=['POST'])
 @login_required
 def logout():
     current_user.set_online_status(False)
@@ -1146,8 +1146,16 @@ def search():
 def messages():
     messages_received = Message.query.filter_by(recipient_id=current_user.id).order_by(Message.timestamp.desc()).all()
     messages_sent = Message.query.filter_by(sender_id=current_user.id).order_by(Message.timestamp.desc()).all()
-    return render_template('messages.html', 
-                         messages_received=messages_received, 
+    selected_id = request.args.get('user', type=int)
+    if selected_id:
+        selected_user = User.query.get_or_404(selected_id)
+        if selected_user.id == current_user.id or current_user.has_blocked(selected_user) or current_user.is_blocked_by(selected_user):
+            flash('This conversation is unavailable.', 'error')
+            return redirect(url_for('messages'))
+        Message.query.filter_by(sender_id=selected_user.id, recipient_id=current_user.id, is_read=False).update({'is_read': True})
+        db.session.commit()
+    return render_template('messages.html',
+                         messages_received=messages_received,
                          messages_sent=messages_sent,
                          user_query=User.query)
 
@@ -1201,10 +1209,16 @@ def send_message(recipient_id):
         if media and media.filename:
             media_type = get_file_type(media.filename)
             if not media_type:
-                return jsonify({'status': 'error', 'message': 'Unsupported attachment type.'}), 400
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify({'status': 'error', 'message': 'Unsupported attachment type.'}), 400
+                flash('Unsupported attachment type.', 'error')
+                return redirect(url_for('messages', user=recipient_id))
             media_filename = save_media(media, media_type)
             if not media_filename:
-                return jsonify({'status': 'error', 'message': 'Attachment upload failed.'}), 400
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify({'status': 'error', 'message': 'Attachment upload failed.'}), 400
+                flash('Attachment upload failed.', 'error')
+                return redirect(url_for('messages', user=recipient_id))
         
         message = Message(
             sender_id=current_user.id,
@@ -1245,7 +1259,7 @@ def send_message(recipient_id):
             })
         else:
             flash('Message sent successfully!', 'success')
-            return redirect(url_for('messages'))
+            return redirect(url_for('messages', user=recipient_id))
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
@@ -1254,7 +1268,7 @@ def send_message(recipient_id):
         })
     else:
         flash('Message content required', 'error')
-        return redirect(url_for('messages'))
+        return redirect(url_for('messages', user=recipient_id))
 
 @app.route('/friend_requests')
 @login_required
