@@ -62,7 +62,7 @@
         </div>
 
         <div class="panel-card composer-card">
-            <form method="POST" action="{{ url_for('create_post') }}" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <form method="POST" action="{{ url_for('create_post') }}" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="composer-top">
                     <img src="{{ url_for('uploaded_file', filename=current_user.get_profile_picture) }}" class="profile-picture-small" alt="{{ current_user.username }} avatar">
                     <input type="text" class="form-control composer-input" name="content" placeholder="Share an update with your HDM network..." aria-label="Post content">
@@ -110,7 +110,7 @@
                             <button class="btn btn-link muted-dot" type="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-three-dots"></i></button>
                             <ul class="dropdown-menu dropdown-menu-end menu-card">
                                 <li>
-                                    <form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <form action="{{ url_for('delete_post', post_id=post.id) }}" method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Delete post</button>
                                     </form>
                                 </li>
@@ -134,20 +134,20 @@
                 </div>
 
                 <div class="post-actions">
-                    <form method="POST" action="{{ url_for('like_post', post_id=post.id) }}" class="post-action-form" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <form method="POST" action="{{ url_for('like_post', post_id=post.id) }}" class="post-action-form" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="action-btn small {% if has_liked %}active{% endif %}" data-like-button="{{ post.id }}"><i class="bi bi-heart-fill"></i> Like</button>
                     </form>
                     <button type="button" class="action-btn small comment-toggle"><i class="bi bi-chat-left-text"></i> Comment</button>
-                    <form method="POST" action="{{ url_for('share_post', post_id=post.id) }}" class="post-action-form" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <form method="POST" action="{{ url_for('share_post', post_id=post.id) }}" class="post-action-form" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="action-btn small share-button"><i class="bi bi-share-fill"></i> Share</button>
                     </form>
-                    <form method="POST" action="{{ url_for('save_post', post_id=post.id) }}" class="post-action-form" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <form method="POST" action="{{ url_for('save_post', post_id=post.id) }}" class="post-action-form" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="action-btn small"><i class="bi bi-bookmark"></i> Save</button>
                     </form>
                 </div>
 
                 <div class="comment-section">
-                    <form method="POST" action="{{ url_for('add_comment', post_id=post.id) }}" class="comment-form" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <form method="POST" action="{{ url_for('add_comment', post_id=post.id) }}" class="comment-form" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="text" class="form-control" name="content" placeholder="Write a response..." required>
                         <button type="submit" class="btn btn-primary">Send</button>
                     </form>
@@ -163,14 +163,14 @@
                                     </div>
                                     <p>{{ comment.content }}</p>
                                     <button type="button" class="reply-link">Reply</button>
-                                    <form class="reply-form" method="POST" action="{{ url_for('add_comment', post_id=post.id) }}" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <form class="reply-form" method="POST" action="{{ url_for('add_comment', post_id=post.id) }}" data-ajax-form="true"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <input type="hidden" name="parent_id" value="{{ comment.id }}">
                                         <input type="text" name="content" class="form-control" placeholder="Reply to {{ comment.author.username }}..." required>
                                         <button type="submit" class="btn btn-sm btn-primary">Reply</button>
                                     </form>
                                 </div>
                                 {% if comment.author == current_user %}
-                                    <form action="{{ url_for('delete_comment', comment_id=comment.id) }}" method="POST" class="comment-delete"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <form action="{{ url_for('delete_comment', comment_id=comment.id) }}" method="POST" class="comment-delete"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-link text-danger p-0"><i class="bi bi-trash"></i></button>
                                     </form>
                                 {% endif %}
@@ -187,7 +187,7 @@
                                         <p>{{ reply.content }}</p>
                                     </div>
                                     {% if reply.author == current_user %}
-                                        <form action="{{ url_for('delete_comment', comment_id=reply.id) }}" method="POST" class="comment-delete"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <form action="{{ url_for('delete_comment', comment_id=reply.id) }}" method="POST" class="comment-delete"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit" class="btn btn-link text-danger p-0"><i class="bi bi-trash"></i></button>
                                         </form>
                                     {% endif %}
@@ -211,7 +211,7 @@
                             <strong><a href="{{ url_for('profile', username=user.username) }}">{{ user.username }}</a></strong>
                             <span>{{ user.bio or 'New HDM member' }}</span>
                         </div>
-                        <form method="POST" action="{{ url_for('send_friend_request', user_id=user.id) }}" data-ajax-form="true" class="friend-request-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <form method="POST" action="{{ url_for('send_friend_request', user_id=user.id) }}" data-ajax-form="true" class="friend-request-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="mini-action">Connect</button>
                         </form>
                     </div>
@@ -237,7 +237,7 @@
                 <h5 class="modal-title">Create a story</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" action="{{ url_for('create_story') }}" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <form method="POST" action="{{ url_for('create_story') }}" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <textarea class="form-control story-caption" name="caption" rows="3" placeholder="What are you sharing today?"></textarea>
                     <label class="upload-story mt-3" for="storyMedia">
