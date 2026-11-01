@@ -12,7 +12,7 @@
 
     <div class="settings-layout">
         <div class="panel-card settings-card">
-            <form method="POST">
+            <form method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="settings-section">
                     <div class="section-head"><h4>Online status</h4></div>
                     <div class="toggle-row">
@@ -53,7 +53,7 @@
                                     <img src="{{ url_for('uploaded_file', filename=block.blocked.get_profile_picture) }}" alt="{{ block.blocked.username }} avatar">
                                     <span>{{ block.blocked.username }}</span>
                                 </div>
-                                <form action="{{ url_for('unblock_user', user_id=block.blocked.id) }}" method="POST">
+                                <form action="{{ url_for('unblock_user', user_id=block.blocked.id) }}" method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="ghost-button ghost-button--danger">Unblock</button>
                                 </form>
                             </div>
