@@ -13,7 +13,7 @@
                 <div class="profile-stats">
                     <div><strong>{{ current_user.posts|length }}</strong><span>Posts</span></div>
                     <div><strong>{{ current_user.friends.count() }}</strong><span>Friends</span></div>
-                    <div><strong>94%</strong><span>Profile</span></div>
+                    <div><strong>{{ current_user.stories|length }}</strong><span>Stories</span></div>
                 </div>
             </div>
         </div>
@@ -32,9 +32,7 @@
         <div class="panel-card small-panel">
             <div class="section-head"><h4>Saved</h4></div>
             <div class="mini-list">
-                <span><i class="bi bi-bookmark"></i> Creative ideas</span>
-                <span><i class="bi bi-bookmark"></i> Travel inspiration</span>
-                <span><i class="bi bi-bookmark"></i> Product inspiration</span>
+                <a href="{{ url_for('saved_posts') }}"><i class="bi bi-bookmark"></i> View saved posts</a>
             </div>
         </div>
     </aside>
@@ -81,9 +79,9 @@
 
         <div class="feed-filter-bar panel-card">
             <div class="filter-group">
-                <button class="filter-pill active" type="button">For you</button>
-                <button class="filter-pill" type="button">Following</button>
-                <button class="filter-pill" type="button">Recent</button>
+                <a class="filter-pill {{ 'active' if active_feed == 'for-you' else '' }}" href="{{ url_for('index', feed='for-you') }}">For you</a>
+                <a class="filter-pill {{ 'active' if active_feed == 'following' else '' }}" href="{{ url_for('index', feed='following') }}">Following</a>
+                <a class="filter-pill {{ 'active' if active_feed == 'recent' else '' }}" href="{{ url_for('index', feed='recent') }}">Recent</a>
             </div>
         </div>
 
@@ -221,12 +219,12 @@
             </div>
         </div>
         <div class="panel-card side-panel">
-            <div class="section-head"><h4>Trending</h4></div>
+            <div class="section-head"><h4>Explore topics</h4></div>
             <div class="trend-list">
-                <div><span>#Design</span><small>18.4k posts</small></div>
-                <div><span>#LaunchWeek</span><small>9.2k posts</small></div>
-                <div><span>#RemoteWork</span><small>6.7k posts</small></div>
-                <div><span>#CreatorEconomy</span><small>4.1k posts</small></div>
+                <div><span>#Design</span><small>Discover creative ideas</small></div>
+                <div><span>#Technology</span><small>Talk about what is new</small></div>
+                <div><span>#Learning</span><small>Share what you are learning</small></div>
+                <div><span>#Community</span><small>Meet people with shared interests</small></div>
             </div>
         </div>
     </aside>
@@ -273,6 +271,16 @@
             <div class="story-viewer-body">
                 <img id="storyViewerMedia" src="" alt="Story media">
                 <p id="storyViewerCaption"></p>
+                <div class="story-reactions d-flex gap-2 flex-wrap mt-3">
+                    <button type="button" class="mini-action" data-story-reaction="like">Like</button>
+                    <button type="button" class="mini-action" data-story-reaction="love">Love</button>
+                    <button type="button" class="mini-action" data-story-reaction="wow">Wow</button>
+                    <button type="button" class="mini-action" data-story-reaction="fire">Fire</button>
+                </div>
+                <form id="storyReplyForm" method="POST" action="" data-ajax-form="true" class="mt-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="d-flex gap-2"><input class="form-control" type="text" name="content" maxlength="2000" placeholder="Reply to this story…" required><button class="btn btn-primary" type="submit">Send</button></div>
+                </form>
             </div>
         </div>
     </div>
