@@ -130,7 +130,11 @@
   document.addEventListener('show.bs.modal', (event) => {
     if (event.target.id === 'storyViewerModal') {
       const trigger = event.relatedTarget;
-      if (trigger?.dataset.storyId) event.target.dataset.storyId = trigger.dataset.storyId;
+      if (trigger?.dataset.storyId) {
+        event.target.dataset.storyId = trigger.dataset.storyId;
+        const replyForm = $('#storyReplyForm', event.target);
+        if (replyForm) replyForm.action = '/story/' + encodeURIComponent(trigger.dataset.storyId) + '/reply';
+      }
     }
   });
 
