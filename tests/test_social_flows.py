@@ -1,7 +1,7 @@
 import io
 import uuid
 
-from app import User, Post, Story, app, db
+from app import User, Post, Story, Comment, Message, app, db
 
 # Route-flow tests focus on application behaviour; CSRF is exercised separately in production configuration.
 app.config['WTF_CSRF_ENABLED'] = False
@@ -85,3 +85,49 @@ def test_health_endpoint_checks_database():
     response = app.test_client().get('/healthz')
     assert response.status_code == 200
     assert response.get_json() == {'status': 'ok', 'database': 'ok'}
+
+
+def test_replies_are_limited_to_root_comments_on_the_same_post():
+    username, password = _create_user('replyuser')
+    client = app.test_client()
+    client.post('/login', data={'username': username, 'password': password})
+
+    client.post('/create_post', data={'content': 'Reply validation post'})
+    with app.app_context():
+        post = Post.query.filter_by(content='Reply validation post').order_by(Post.id.desc()).first()
+        assert post is not None
+        root = client.post(f'/comment/{post.id}', data={'content': 'Root comment'}, headers={'X-Requested-With': 'XMLHttpRequest'}).get_json()
+        reply = client.post(f'/comment/{post.id}', data={'content': 'First reply', 'parent_id': root['comment_id']}, headers={'X-Requested-With': 'XMLHttpRequest'}).get_json()
+        assert root['status'] == 'ok'
+        assert reply['status'] == 'ok'
+        nested = client.post(f'/comment/{post.id}', data={'content': 'Nested reply', 'parent_id': reply['comment_id']}, headers={'X-Requested-With': 'XMLHttpRequest'})
+        assert nested.status_code == 404
+
+
+def test_direct_message_persists_and_marks_as_read():
+    sender_name, password = _create_user('sender')
+    recipient_name, _ = _create_user('recipient')
+    with app.app_context():
+        sender_id = User.query.filter_by(username=sender_name).first().id
+        recipient_id = User.query.filter_by(username=recipient_name).first().id
+
+    sender = app.test_client()
+    sender.post('/login', data={'username': sender_name, 'password': password})
+    sent = sender.post(f'/send_message/{recipient_id}', data={'content': 'Hello from HDM'}, follow_redirects=False)
+    assert sent.status_code == 302
+    assert f'/messages?user={recipient_id}' in sent.headers['Location']
+
+    with app.app_context():
+        message = Message.query.filter_by(sender_id=sender_id, recipient_id=recipient_id, content='Hello from HDM').first()
+        assert message is not None
+        assert message.is_read is False
+
+    recipient = app.test_client()
+    recipient.post('/login', data={'username': recipient_name, 'password': password})
+    conversation = recipient.get(f'/messages?user={sender_id}')
+    assert conversation.status_code == 200
+    assert b'Hello from HDM' in conversation.data
+
+    with app.app_context():
+        message = Message.query.filter_by(sender_id=sender_id, recipient_id=recipient_id, content='Hello from HDM').first()
+        assert message.is_read is True
