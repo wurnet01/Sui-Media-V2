@@ -23,8 +23,8 @@
                         </div>
                     </a>
                     <div class="request-actions">
-                        <form action="{{ url_for('accept_friend_request', user_id=request.sender.id) }}" method="POST" data-ajax-form="true" class="friend-request-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="action-chip action-chip--solid">Accept</button></form>
-                        <form action="{{ url_for('decline_friend_request', request_id=request.id) }}" method="POST" data-ajax-form="true" class="friend-request-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="ghost-button ghost-button--danger">Decline</button></form>
+                        <form action="{{ url_for('accept_friend_request', user_id=request.sender.id) }}" method="POST" data-ajax-form="true" class="friend-request-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="action-chip action-chip--solid">Accept</button></form>
+                        <form action="{{ url_for('decline_friend_request', request_id=request.id) }}" method="POST" data-ajax-form="true" class="friend-request-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="ghost-button ghost-button--danger">Decline</button></form>
                     </div>
                 </div>
                 {% else %}
