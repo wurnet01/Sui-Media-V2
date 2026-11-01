@@ -1,13 +1,18 @@
+import os
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
 
-# Initialize SQLAlchemy instance
+# One database URL for local SQLite and production PostgreSQL.
 db = SQLAlchemy()
 
+
 def init_db(app):
-    # Configure SQLAlchemy
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///social_platform.db'
+    database_url = os.environ.get('DATABASE_URL', 'sqlite:///social_platform.db')
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
-    # Initialize the database with the app
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+    }
     db.init_app(app)
