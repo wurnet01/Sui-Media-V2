@@ -189,6 +189,34 @@
     }
   });
 
+  if (window.io) {
+    const socket = window.io({ transports: ['websocket', 'polling'] });
+    socket.on('new_message', (payload) => {
+      const nav = $('#messageNavLink');
+      if (nav) {
+        let badge = $('.badge-dot', nav);
+        if (!badge) { badge = create('span', 'badge-dot', '0'); nav.append(badge); }
+        badge.textContent = String((parseInt(badge.textContent, 10) || 0) + 1);
+      }
+      const chat = $('.message-thread');
+      const activeName = $('.chat-user strong')?.textContent?.trim();
+      if (chat && activeName && activeName === payload.message?.sender_username) {
+        const row = create('div', 'bubble-row');
+        const bubble = create('div', 'message-bubble theirs');
+        if (payload.message.content) bubble.append(create('p', '', payload.message.content));
+        if (payload.message.media_url && payload.message.media_type === 'image') {
+          const image = create('img'); image.src = payload.message.media_url; image.alt = 'Message attachment'; bubble.append(image);
+        } else if (payload.message.media_url && payload.message.media_type === 'video') {
+          const video = create('video'); video.controls = true;
+          const source = create('source'); source.src = payload.message.media_url; video.append(source); bubble.append(video);
+        }
+        bubble.append(create('small', '', payload.message.timestamp || 'Just now'));
+        row.append(bubble); chat.append(row); chat.scrollTop = chat.scrollHeight;
+      }
+      document.dispatchEvent(new CustomEvent('hdm:new-message', { detail: payload }));
+    });
+  }
+
   document.addEventListener('change', (event) => {
     if (event.target.matches('#storyMedia, #media')) {
       const label = event.target.closest('label');
