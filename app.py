@@ -738,13 +738,13 @@ def has_valid_media_signature(file, file_type):
         return False
     if file_type == 'image':
         return (
-            header.startswith(b'\\x89PNG\\r\\n\\x1a\\n') or
-            header.startswith(b'\\xff\\xd8\\xff') or
+            header.startswith(b'\x89PNG\r\n\x1a\n') or
+            header.startswith(b'\xff\xd8\xff') or
             header.startswith((b'GIF87a', b'GIF89a')) or
             (header.startswith(b'RIFF') and header[8:12] == b'WEBP')
         )
     if file_type == 'video':
-        return (len(header) >= 12 and header[4:8] == b'ftyp') or header.startswith(b'\\x1a\\x45\\xdf\\xa3')
+        return (len(header) >= 12 and header[4:8] == b'ftyp') or header.startswith(b'\x1a\x45\xdf\xa3')
     return False
 
 
