@@ -618,6 +618,8 @@ def index():
         if excluded_ids:
             suggestions_query = suggestions_query.filter(~User.id.in_(excluded_ids))
         suggest_users = suggestions_query.order_by(User.id.desc()).limit(6).all()
+        posts = [post for post in posts if post.user_id not in blocked_ids and post.user_id not in blocked_by_ids]
+        active_story_rows = [story for story in active_story_rows if story.user_id not in blocked_ids and story.user_id not in blocked_by_ids]
 
         return render_template('index.html', posts=posts, stories=active_story_rows, suggest_users=suggest_users, active_feed=active_feed)
     return redirect(url_for('login'))
@@ -808,8 +810,8 @@ def create_post():
     media = request.files.get('media')
     feeling = request.form.get('feeling', '')
 
-    content = content.strip() if content else None
-    feeling = feeling.strip() if feeling else None
+    content = sanitize_text(content)[:10000] if content else None
+    feeling = sanitize_text(feeling)[:50] if feeling else None
 
     media_type = None
     media_filename = None
@@ -853,7 +855,7 @@ def create_post():
 @login_required
 @limiter.limit('10 per hour')
 def create_story():
-    caption = sanitize_text(request.form.get('caption', ''))
+    caption = sanitize_text(request.form.get('caption', ''))[:2000]
     media = request.files.get('story_media')
     if not media or not media.filename:
         flash('Add a photo or video to publish a story.', 'error')
@@ -944,6 +946,8 @@ def reply_to_story(story_id):
 @login_required
 def like_post(post_id):
     post = Post.query.get_or_404(post_id)
+    if current_user.has_blocked(post.author) or current_user.is_blocked_by(post.author):
+        return jsonify({'status': 'error', 'message': 'This post is unavailable.'}), 403
     reaction_type = (request.form.get('reaction_type') or 'like').strip().lower()
     if reaction_type not in {'like', 'love', 'wow', 'fire'}:
         reaction_type = 'like'
@@ -960,6 +964,8 @@ def like_post(post_id):
         db.session.add(Like(user_id=current_user.id, post_id=post_id, reaction_type=reaction_type))
         liked = True
 
+    if liked and post.author.id != current_user.id:
+        db.session.add(Notification(user_id=post.author.id, content=f'{current_user.username} reacted to your post.', notification_type='like'))
     db.session.commit()
     count = Like.query.filter_by(post_id=post_id).count()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -978,6 +984,8 @@ def add_comment(post_id):
         return redirect(request.referrer or url_for('index'))
 
     post = Post.query.get_or_404(post_id)
+    if current_user.has_blocked(post.author) or current_user.is_blocked_by(post.author):
+        return jsonify({'status': 'error', 'message': 'This post is unavailable.'}), 403
     parent_id_raw = request.form.get('parent_id', '').strip()
     parent = None
     if parent_id_raw:
@@ -1040,6 +1048,8 @@ def save_post(post_id):
 @login_required
 def share_post(post_id):
     post = Post.query.get_or_404(post_id)
+    if current_user.has_blocked(post.author) or current_user.is_blocked_by(post.author):
+        return jsonify({'status': 'error', 'message': 'This post is unavailable.'}), 403
     share_text = f"Shared from {post.author.username}: {post.content or 'Check this post on HDM'}"
     shared = Post(
         content=share_text,
@@ -1054,7 +1064,8 @@ def share_post(post_id):
         timestamp=datetime.utcnow()
     )
     db.session.add(shared)
-    db.session.add(Notification(user_id=post.author.id, content=f'{current_user.username} shared your post.', notification_type='share'))
+    if post.author.id != current_user.id:
+        db.session.add(Notification(user_id=post.author.id, content=f'{current_user.username} shared your post.', notification_type='share'))
     db.session.commit()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({'status': 'ok', 'post_id': shared.id})
@@ -1080,11 +1091,15 @@ def delete_post(post_id):
     Like.query.filter_by(post_id=post.id).delete()
     Comment.query.filter_by(post_id=post.id).delete()
     
-    # Delete media file if exists
+    # Shared posts may still reference this media file; only remove an unreferenced asset.
     if post.media_file:
-        media_path = os.path.join(app.config['UPLOAD_FOLDER'], post.media_type, os.path.basename(post.media_file))
-        if os.path.exists(media_path):
-            os.remove(media_path)
+        other_posts = Post.query.filter(Post.media_file == post.media_file, Post.id != post.id).count()
+        other_stories = Story.query.filter_by(media_file=post.media_file).count()
+        other_messages = Message.query.filter_by(media_file=post.media_file).count()
+        if not (other_posts or other_stories or other_messages):
+            media_path = os.path.join(app.config['UPLOAD_FOLDER'], post.media_type or '', os.path.basename(post.media_file))
+            if os.path.exists(media_path):
+                os.remove(media_path)
     
     db.session.delete(post)
     db.session.commit()
@@ -1099,6 +1114,7 @@ def delete_comment(comment_id):
         flash('You cannot delete someone else\'s comment!', 'error')
         return redirect(url_for('index'))
     
+    Comment.query.filter_by(parent_id=comment.id).delete(synchronize_session=False)
     db.session.delete(comment)
     db.session.commit()
     flash('Comment deleted successfully!', 'success')
@@ -1344,9 +1360,9 @@ def friend_requests():
 @limiter.limit('30 per hour')
 def send_friend_request(user_id):
     user = User.query.get_or_404(user_id)
-    if user.id == current_user.id:
+    if user.id == current_user.id or current_user.has_blocked(user) or current_user.is_blocked_by(user):
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return jsonify({'status': 'error', 'message': 'You cannot send a friend request to yourself.'}), 400
+            return jsonify({'status': 'error', 'message': 'You cannot send a request to this account.'}), 400
         flash('You cannot send a friend request to yourself.', 'error')
         return redirect(url_for('profile', username=user.username))
 
