@@ -1218,10 +1218,14 @@ def decline_friend_request(request_id):
 
 # Database initialization
 def init_database():
+    """Create missing tables without destroying existing user data.
+
+    Schema changes must be delivered through Flask-Migrate migrations.
+    This helper intentionally never drops or recreates existing tables.
+    """
     with app.app_context():
-        db.drop_all()  # Drop all existing tables
-        db.create_all()  # Create all tables
-        print('Database initialized!')
+        db.create_all()
+        print('Database schema checked; existing data preserved.')
 
 @app.route('/notifications/unread')
 @login_required
