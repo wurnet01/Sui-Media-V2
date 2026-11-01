@@ -625,7 +625,7 @@ def index():
     return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
-@limiter.limit('5 per hour')
+@limiter.limit('5 per hour', methods=['POST'])
 def register():
     if request.method == 'POST':
         username = validate_username(request.form.get('username', ''))
@@ -662,7 +662,7 @@ def register():
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
-@limiter.limit('10 per minute')
+@limiter.limit('10 per minute', methods=['POST'])
 def login():
     if request.method == 'POST':
         username = validate_username(request.form.get('username', ''))
