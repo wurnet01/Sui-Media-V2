@@ -9,6 +9,9 @@ from datetime import datetime, timedelta
 import os
 import re
 import uuid
+import ipaddress
+import socket
+from urllib.parse import urlsplit
 from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
 from flask_migrate import Migrate
@@ -682,11 +685,19 @@ def get_link_preview(url):
         }
     
     try:
-        # Add headers to mimic a browser request
+        parsed = urlsplit(url)
+        if parsed.scheme not in {'http', 'https'} or not parsed.hostname:
+            return {'title': '', 'description': '', 'image': ''}
+        resolved = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == 'https' else 80), type=socket.SOCK_STREAM)
+        if not resolved or any(not ipaddress.ip_address(item[4][0]).is_global for item in resolved):
+            return {'title': '', 'description': '', 'image': ''}
+        # Never follow redirects: a public preview URL must not redirect to a private host.
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=headers, timeout=5, allow_redirects=False)
+        if response.status_code != 200:
+            return {'title': '', 'description': '', 'image': ''}
         soup = BeautifulSoup(response.text, 'html.parser')
 
         # Get title
@@ -717,10 +728,30 @@ def get_link_preview(url):
             'image': ''
         }
 
+def has_valid_media_signature(file, file_type):
+    """Reject files whose bytes do not match their claimed image/video extension."""
+    try:
+        position = file.stream.tell()
+        header = file.stream.read(16)
+        file.stream.seek(position)
+    except (AttributeError, OSError):
+        return False
+    if file_type == 'image':
+        return (
+            header.startswith(b'\\x89PNG\\r\\n\\x1a\\n') or
+            header.startswith(b'\\xff\\xd8\\xff') or
+            header.startswith((b'GIF87a', b'GIF89a')) or
+            (header.startswith(b'RIFF') and header[8:12] == b'WEBP')
+        )
+    if file_type == 'video':
+        return (len(header) >= 12 and header[4:8] == b'ftyp') or header.startswith(b'\\x1a\\x45\\xdf\\xa3')
+    return False
+
+
 def save_media(file, file_type='image'):
     if not file or not file.filename:
         return None
-    if not allowed_file(file.filename, file_type):
+    if not allowed_file(file.filename, file_type) or not has_valid_media_signature(file, file_type):
         return None
     if file.content_length and file.content_length > app.config['MAX_CONTENT_LENGTH']:
         return None
