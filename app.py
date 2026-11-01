@@ -47,6 +47,7 @@ app.config.update(
     PREFERRED_URL_SCHEME='https' if os.environ.get('COOKIE_SECURE', 'auto').lower() != 'false' else 'http',
     WTF_CSRF_ENABLED=True,
     WTF_CSRF_TIME_LIMIT=3600,
+    RATELIMIT_HEADERS_ENABLED=True,
 )
 csrf = CSRFProtect(app)
 limiter = Limiter(
@@ -56,7 +57,6 @@ limiter = Limiter(
     strategy='fixed-window',
     default_limits=[],
 )
-app.config['RATELIMIT_HEADERS_ENABLED'] = True
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
