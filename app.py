@@ -235,9 +235,9 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
-    profile_picture = db.Column(db.String(200), default='default.jpg')
+    profile_picture = db.Column(db.String(200), default='default-avatar.svg')
     bio = db.Column(db.Text, default='')
-    cover_photo = db.Column(db.String(200), default='default_cover.jpg')
+    cover_photo = db.Column(db.String(200), default='default-cover.svg')
     date_of_birth = db.Column(db.Date, nullable=True)
     place_of_birth = db.Column(db.String(100), nullable=True)
     marital_status = db.Column(db.String(20), nullable=True)  # Single, Married, etc.
@@ -276,7 +276,7 @@ class User(UserMixin, db.Model):
     @property
     def get_profile_picture(self):
         if not self.profile_picture:
-            return 'default.jpg'
+            return 'default-avatar.svg'
         if '/' in self.profile_picture:
             return self.profile_picture
         if not os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], self.profile_picture)):
@@ -372,7 +372,7 @@ class User(UserMixin, db.Model):
     @property
     def get_cover_photo(self):
         if not self.cover_photo or not os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], self.cover_photo)):
-            return 'default_cover.jpg'
+            return 'default-cover.svg'
         return self.cover_photo
     
     def send_friend_request(self, user):
@@ -1205,7 +1205,7 @@ def send_message(recipient_id):
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({'status': 'error', 'message': 'Messaging is unavailable for this account.'}), 403
         flash('Messaging is unavailable for this account.', 'error')
-        return redirect(url_for('messages'))
+        return redirect(url_for('messages', user=recipient_id))
     content = sanitize_text(request.form.get('content', ''))[:5000]
     media = request.files.get('media')
     
